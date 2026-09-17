@@ -37,49 +37,63 @@ export type ColorScheme = "light" | "dark";
 
 const light = {
   // ---------------------------------------------------------------------------
-  // Surfaces: backgrounds, from the screen down to small fills.
-  // Black / gold identity to match the Tasklio logo.
+  // Surfaces: warm obsidian, from the screen down to small fills.
+  // Custom premium black + gold identity for Tasklio (not copied from refs).
   // ---------------------------------------------------------------------------
-  surface: "#000000", // primary canvas, most of every screen
-  onSurface: "#FFFFFF", // text and icons on the canvas
-  surfaceSecondary: "#111111", // cards, sheets, list rows
-  onSurfaceSecondary: "#F5F5F5", // text and icons on cards, sheets, rows
-  surfaceTertiary: "#1A1A1A", // input backgrounds, chips, deepest nesting
-  onSurfaceTertiary: "#D4D4D4", // text on inputs and chips; also muted text
-  surfaceInverse: "#FFD700", // tooltips, snackbars, anything popping against the theme
-  onSurfaceInverse: "#000000", // text and icons on the inverse surface
-  muted: "#8A8A8A", // subdued text on surface: captions, timestamps, placeholders
+  surface: "#0B0B0E", // primary canvas, most of every screen
+  onSurface: "#FAF7F0", // text and icons on the canvas
+  surfaceSecondary: "#15151B", // cards, sheets, list rows
+  onSurfaceSecondary: "#EDEAE2", // text and icons on cards, sheets, rows
+  surfaceTertiary: "#1F1F27", // input backgrounds, chips, deepest nesting
+  onSurfaceTertiary: "#C9C6BF", // text on inputs and chips
+  surfaceInverse: "#F5C542", // tooltips, snackbars, anything popping against theme
+  onSurfaceInverse: "#0B0B0E", // text and icons on the inverse surface
+  muted: "#8B8880", // subdued text: captions, timestamps, placeholders
 
   // ---------------------------------------------------------------------------
   // Brand: gold identity color and the fills built from it.
   // ---------------------------------------------------------------------------
-  brand: "#FFC107", // base hue, anchor only
-  onBrand: "#000000", // text and icons placed directly on brand
-  brandPrimary: "#FFC107", // primary CTA, active tab indicator, selected states
-  onBrandPrimary: "#000000", // text and icons on brandPrimary
-  brandSecondary: "#3A2F00", // secondary CTA, less prominent accents
-  onBrandSecondary: "#FFD700", // text and icons on brandSecondary
-  brandTertiary: "#1A1A1A", // chips, tags, badges, subtle brand moments
-  onBrandTertiary: "#FFD700", // text and icons on brandTertiary
+  brand: "#F5C542", // base hue, anchor only
+  onBrand: "#0B0B0E", // text and icons placed directly on brand
+  brandPrimary: "#F5C542", // primary CTA, active states, highlights
+  onBrandPrimary: "#0B0B0E", // text and icons on brandPrimary
+  brandSecondary: "#2A2410", // secondary CTA, muted gold surfaces
+  onBrandSecondary: "#F5C542", // text and icons on brandSecondary
+  brandTertiary: "#191813", // chips, tags, subtle brand moments
+  onBrandTertiary: "#E8C86A", // text and icons on brandTertiary
 
   // ---------------------------------------------------------------------------
   // Status: semantic only, never decorative.
   // ---------------------------------------------------------------------------
-  success: "#22C55E",
-  onSuccess: "#000000",
-  warning: "#F59E0B",
-  onWarning: "#000000",
-  error: "#EF4444",
-  onError: "#000000",
-  info: "#3B82F6",
-  onInfo: "#000000",
+  success: "#3BD48A",
+  onSuccess: "#062015",
+  warning: "#F5B942",
+  onWarning: "#241900",
+  error: "#FF6B6B",
+  onError: "#2A0B0B",
+  info: "#5AC8FA",
+  onInfo: "#04212B",
+
+  // ---------------------------------------------------------------------------
+  // Game accent hues (icon color + soft tile background). Custom palette.
+  // ---------------------------------------------------------------------------
+  accentSpin: "#F5C542",
+  accentSpinSoft: "#2E2712",
+  accentPuzzle: "#38D6C4",
+  accentPuzzleSoft: "#0F2E2B",
+  accentQuiz: "#8E7CFF",
+  accentQuizSoft: "#211E3D",
+  accentTap: "#FF7A6B",
+  accentTapSoft: "#331917",
+  accentLucky: "#F58EE0",
+  accentLuckySoft: "#301A2C",
 
   // ---------------------------------------------------------------------------
   // Lines
   // ---------------------------------------------------------------------------
-  border: "#262626", // hairline outline
-  borderStrong: "#3A3A3A", // focus rings, selected outlines
-  divider: "#1F1F1F", // subtle list separators
+  border: "#26262F", // hairline outline
+  borderStrong: "#3A3A46", // focus rings, selected outlines
+  divider: "#1C1C23", // subtle list separators
 };
 
 export type ThemeColors = typeof light;

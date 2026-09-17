@@ -118,7 +118,7 @@ export default function Splash() {
                 resizeMode="cover"
                 testID="splash-logo"
               />
-              <Animated.View style={[styles.shimmer, shimmerStyle]} pointerEvents="none">
+              <Animated.View style={[styles.shimmer, shimmerStyle, { pointerEvents: "none" }]}>
                 <LinearGradient
                   colors={["transparent", "rgba(255,255,255,0.55)", "transparent"]}
                   style={styles.shimmerFill}
