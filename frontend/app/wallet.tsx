@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, ScrollView, TextInput } from "react-native";
+import { View, Text, Pressable, TextInput } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -128,7 +128,7 @@ export default function Wallet() {
             <Text style={styles.emptyText}>No payouts yet. Redeem your points to see them here.</Text>
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
+          <View style={{ gap: 14 }}>
             {state.payouts.map((p) => {
               const ss = STATUS_STYLE[p.status];
               const tint = colors[ss.key];
@@ -151,7 +151,7 @@ export default function Wallet() {
                 </View>
               );
             })}
-          </ScrollView>
+          </View>
         )}
       </KeyboardAwareScrollView>
     </View>
@@ -208,12 +208,11 @@ const useStyles = makeStyles((colors) => ({
   empty: { alignItems: "center", gap: 12, paddingVertical: 24, paddingHorizontal: 30 },
   emptyText: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
   payoutCard: {
-    width: 210,
+    width: "100%",
     borderRadius: 16,
     borderWidth: 1.5,
     padding: 16,
     backgroundColor: colors.surfaceSecondary,
-    justifyContent: "space-between",
   },
   payoutTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   payoutAmt: { color: colors.onSurface, fontSize: 22, fontWeight: "900" },

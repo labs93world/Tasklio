@@ -6,6 +6,7 @@ import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut } from "react-nati
 import { Icon } from "@/src/components/icon";
 import { useApp } from "@/src/store/app-store";
 import { useToast } from "@/src/components/toast";
+import { SHARE_MESSAGE, PLAY_STORE_URL, COMMUNITY_URL, HELP_MAILTO } from "@/src/constants/links";
 import { makeStyles, useTheme } from "@/src/theme";
 
 type Props = { visible: boolean; onClose: () => void };
@@ -27,21 +28,19 @@ export function DrawerMenu({ visible, onClose }: Props) {
     onClose();
     const ok = await Linking.canOpenURL(url).catch(() => false);
     if (ok) Linking.openURL(url);
-    else showToast(`${label} link unavailable offline.`, "info");
+    else showToast(`${label} is unavailable right now.`, "info");
   };
 
-  const onShare = async () => {
+  const onShare = () => {
     onClose();
-    setTimeout(() => {
-      Share.share({ message: "Play Tasklio and earn real rewards! Download now." }).catch(() => {});
-    }, 220);
+    setTimeout(() => Share.share({ message: SHARE_MESSAGE }).catch(() => {}), 220);
   };
 
   const items = [
     { icon: "share-variant", label: "Share", onPress: onShare },
-    { icon: "star-outline", label: "Rate us", onPress: () => openUrl("market://details?id=com.altaftech.tasklio", "Rate") },
-    { icon: "account-group", label: "Join Community", onPress: () => openUrl("https://t.me/", "Community") },
-    { icon: "face-agent", label: "Help & Support", onPress: () => go("/support") },
+    { icon: "star-outline", label: "Rate us", onPress: () => openUrl(PLAY_STORE_URL, "Play Store") },
+    { icon: "account-group", label: "Join Community", onPress: () => openUrl(COMMUNITY_URL, "Community") },
+    { icon: "face-agent", label: "Help & Support", onPress: () => openUrl(HELP_MAILTO, "Email") },
     { icon: "file-document-outline", label: "Terms of use", onPress: () => go("/legal/terms") },
     { icon: "shield-check-outline", label: "Privacy Policy", onPress: () => go("/legal/privacy") },
   ];
@@ -70,10 +69,10 @@ export function DrawerMenu({ visible, onClose }: Props) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>
-              {state.profile.name}
+              {state.profile.name || "Guest"}
             </Text>
-            <Text style={styles.email} numberOfLines={1}>
-              {state.profile.email}
+            <Text style={styles.mobile} numberOfLines={1}>
+              {state.profile.mobile ? `+91 ${state.profile.mobile}` : "Not signed in"}
             </Text>
           </View>
         </View>
@@ -103,7 +102,7 @@ export function DrawerMenu({ visible, onClose }: Props) {
 }
 
 const useStyles = makeStyles((colors) => ({
-  backdropWrap: { ...abs() },
+  backdropWrap: { ...({ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as const) },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
   panel: {
     position: "absolute",
@@ -120,23 +119,11 @@ const useStyles = makeStyles((colors) => ({
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   menuTitle: { color: colors.onSurface, fontSize: 24, fontWeight: "800" },
   profile: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 22 },
-  avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.brandPrimary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   name: { color: colors.onSurface, fontSize: 22, fontWeight: "800" },
-  email: { color: colors.muted, fontSize: 14, marginTop: 2 },
+  mobile: { color: colors.muted, fontSize: 14, marginTop: 2 },
   divider: { height: 1, backgroundColor: colors.divider, marginVertical: 18 },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    paddingVertical: 15,
-  },
+  row: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 15 },
   rowLabel: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 17, fontWeight: "600" },
   restricted: {
     flexDirection: "row",
@@ -152,7 +139,3 @@ const useStyles = makeStyles((colors) => ({
   },
   restrictedLabel: { flex: 1, color: colors.brandPrimary, fontSize: 17, fontWeight: "700" },
 }));
-
-function abs() {
-  return { position: "absolute" as const, top: 0, left: 0, right: 0, bottom: 0 };
-}

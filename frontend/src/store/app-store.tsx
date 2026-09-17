@@ -7,7 +7,7 @@ import { storage } from "@/src/utils/storage";
 import { uid } from "@/src/utils/format";
 import { POINTS_PER_RUPEE } from "@/src/constants/games";
 
-const STATE_KEY = "tasklio_state_v2";
+const STATE_KEY = "tasklio_state_v3";
 const BACKUP_FILE = FileSystem.documentDirectory + "tasklio_backup.json";
 
 export type PayoutStatus = "pending" | "successful" | "failed";
@@ -16,18 +16,19 @@ export type Txn = {
   id: string;
   kind: "earn" | "payout" | "adjust";
   title: string;
-  points: number; // positive earn, negative spend
+  points: number;
   ts: number;
 };
 
 export type Notif = {
   id: string;
   icon: string;
-  tintKey: "accentSpin" | "accentPuzzle" | "accentQuiz" | "accentTap" | "accentLucky" | "info" | "success";
+  tintKey: string;
   title: string;
   body: string;
   ts: number;
   read: boolean;
+  pinned?: boolean;
 };
 
 export type Payout = {
@@ -38,65 +39,98 @@ export type Payout = {
   ts: number;
 };
 
+export type Account = { name: string; mobile: string; passwordHash: string };
+
 export type AppState = {
-  profile: { name: string; email: string };
+  profile: { name: string; mobile: string };
+  account: Account | null;
+  loggedIn: boolean;
   points: number;
   txns: Txn[];
   notifs: Notif[];
   payouts: Payout[];
   cooldowns: Record<string, number>;
   adminPin: string;
+  lastDailyReminder: string; // yyyy-mm-dd
 };
 
+function simpleHash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 function seedState(): AppState {
-  const now = Date.now();
   return {
-    profile: { name: "Guest", email: "guest@example.com" },
+    profile: { name: "Guest", mobile: "" },
+    account: null,
+    loggedIn: false,
     points: 0,
     txns: [],
-    notifs: [
-      {
-        id: uid(),
-        icon: "wallet",
-        tintKey: "info",
-        title: "Welcome to Tasklio",
-        body: "Play games, collect points and cash out over UPI.",
-        ts: now,
-        read: false,
-      },
-      {
-        id: uid(),
-        icon: "star",
-        tintKey: "accentSpin",
-        title: "Daily rewards are live",
-        body: "Spin the wheel every day for bonus points.",
-        ts: now - 26 * 60 * 60 * 1000,
-        read: true,
-      },
-    ],
+    notifs: [],
     payouts: [],
     cooldowns: {},
     adminPin: "1234",
+    lastDailyReminder: "",
   };
 }
+
+// Add the 5am "Daily rewards are live" reminder once per day (offline, on open).
+function withDailyReminder(s: AppState): AppState {
+  if (!s.loggedIn) return s;
+  const now = new Date();
+  const fiveAm = new Date();
+  fiveAm.setHours(5, 0, 0, 0);
+  if (now < fiveAm) return s;
+  if (s.lastDailyReminder === todayKey()) return s;
+  return {
+    ...s,
+    lastDailyReminder: todayKey(),
+    notifs: [
+      {
+        id: uid(),
+        icon: "gift",
+        tintKey: "accentSpin",
+        title: "Daily rewards are live",
+        body: "Come every day for bonus points.",
+        ts: Date.now(),
+        read: false,
+      },
+      ...s.notifs,
+    ],
+  };
+}
+
+type AuthResult = { ok: boolean; msg: string };
 
 type Ctx = {
   ready: boolean;
   state: AppState;
+  // auth
+  createAccount: (d: { name: string; mobile: string; confirmMobile: string; password: string; confirmPassword: string }) => AuthResult;
+  login: (d: { mobile: string; password: string }) => AuthResult;
+  logout: () => void;
+  // gameplay
   earnPoints: (opts: { gameId?: string; points: number; title: string }) => void;
-  requestPayout: (amountRupees: number, upi: string) => { ok: boolean; msg: string };
-  markAllRead: () => void;
-  clearNotifs: () => void;
-  pushNotif: (n: Omit<Notif, "id" | "ts" | "read">) => void;
+  requestPayout: (amountRupees: number, upi: string) => AuthResult;
   canPlay: (gameId: string, cooldownMs: number) => { ok: boolean; remainingMs: number };
+  // notifications
+  markAllRead: () => void;
+  markNotifRead: (id: string) => void;
+  addCustomNotification: (d: { title: string; body: string }) => void;
   // admin
   adminAdjust: (delta: number, note: string) => void;
   setPayoutStatus: (id: string, status: PayoutStatus) => void;
-  setProfile: (p: { name: string; email: string }) => void;
+  setProfile: (p: { name: string; mobile: string }) => void;
   setAdminPin: (pin: string) => void;
   resetAll: () => void;
   exportBackup: () => Promise<string>;
-  importBackup: () => Promise<{ ok: boolean; msg: string }>;
+  importBackup: () => Promise<AuthResult>;
 };
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -112,7 +146,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(seedState);
   const loaded = useRef(false);
 
-  // Load once
   useEffect(() => {
     (async () => {
       const raw = await storage.getItem(STATE_KEY, "");
@@ -124,25 +157,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           next = null;
         }
       }
-      // Fallback: try device backup file (survives some reinstall/backup cases)
       if (!next) {
         try {
           const info = await FileSystem.getInfoAsync(BACKUP_FILE);
           if (info.exists) {
-            const fileRaw = await FileSystem.readAsStringAsync(BACKUP_FILE);
-            next = JSON.parse(fileRaw) as AppState;
+            next = JSON.parse(await FileSystem.readAsStringAsync(BACKUP_FILE)) as AppState;
           }
         } catch {
           next = null;
         }
       }
-      if (next) setState({ ...seedState(), ...next });
+      const merged = next ? { ...seedState(), ...next } : seedState();
+      setState(withDailyReminder(merged));
       loaded.current = true;
       setReady(true);
     })();
   }, []);
 
-  // Persist on every change (AsyncStorage + device backup file)
   useEffect(() => {
     if (!loaded.current) return;
     const json = JSON.stringify(state);
@@ -150,76 +181,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     FileSystem.writeAsStringAsync(BACKUP_FILE, json).catch(() => {});
   }, [state]);
 
-  const pushNotif: Ctx["pushNotif"] = (n) => {
-    setState((s) => ({
-      ...s,
-      notifs: [{ ...n, id: uid(), ts: Date.now(), read: false }, ...s.notifs],
-    }));
+  const createAccount: Ctx["createAccount"] = ({ name, mobile, confirmMobile, password, confirmPassword }) => {
+    if (!name.trim()) return { ok: false, msg: "Please enter your name." };
+    if (!/^\d{10}$/.test(mobile)) return { ok: false, msg: "Enter a valid 10-digit mobile number." };
+    if (mobile !== confirmMobile) return { ok: false, msg: "Mobile numbers do not match." };
+    if (password.length < 4) return { ok: false, msg: "Password must be at least 4 characters." };
+    if (password !== confirmPassword) return { ok: false, msg: "Passwords do not match." };
+    const account: Account = { name: name.trim(), mobile, passwordHash: simpleHash(password) };
+    setState((s) => ({ ...s, account, loggedIn: true, profile: { name: account.name, mobile } }));
+    return { ok: true, msg: `Welcome, ${account.name}!` };
   };
 
+  const login: Ctx["login"] = ({ mobile, password }) => {
+    if (!state.account) return { ok: false, msg: "No account found. Please create one." };
+    if (state.account.mobile !== mobile || state.account.passwordHash !== simpleHash(password)) {
+      return { ok: false, msg: "Incorrect mobile number or password." };
+    }
+    setState((s) => ({ ...s, loggedIn: true, profile: { name: s.account!.name, mobile } }));
+    return { ok: true, msg: `Welcome back, ${state.account.name}!` };
+  };
+
+  const logout: Ctx["logout"] = () => setState((s) => ({ ...s, loggedIn: false }));
+
   const earnPoints: Ctx["earnPoints"] = ({ gameId, points, title }) => {
-    setState((s) => {
-      const cooldowns = gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns;
-      return {
-        ...s,
-        points: s.points + points,
-        cooldowns,
-        txns: [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns],
-        notifs: [
-          {
-            id: uid(),
-            icon: "star",
-            tintKey: "accentSpin",
-            title: `You earned ${points} points`,
-            body: `${title} added ${points} pts to your wallet.`,
-            ts: Date.now(),
-            read: false,
-          },
-          ...s.notifs,
-        ],
-      };
-    });
+    setState((s) => ({
+      ...s,
+      points: s.points + points,
+      cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
+      txns: [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns],
+    }));
   };
 
   const requestPayout: Ctx["requestPayout"] = (amountRupees, upi) => {
     const cost = Math.round(amountRupees * POINTS_PER_RUPEE);
-    if (!upi || !/^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi)) {
-      return { ok: false, msg: "Enter a valid UPI ID (name@bank)." };
-    }
-    if (state.points < cost) {
-      return { ok: false, msg: "Not enough points for this payout." };
-    }
+    if (!upi || !/^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi)) return { ok: false, msg: "Enter a valid UPI ID (name@bank)." };
+    if (state.points < cost) return { ok: false, msg: "Not enough points for this payout." };
     setState((s) => ({
       ...s,
       points: s.points - cost,
-      payouts: [
-        { id: uid(), amountRupees, upi, status: "pending", ts: Date.now() },
-        ...s.payouts,
-      ],
-      txns: [
-        { id: uid(), kind: "payout", title: `Payout to ${upi}`, points: -cost, ts: Date.now() },
-        ...s.txns,
-      ],
-      notifs: [
-        {
-          id: uid(),
-          icon: "bank-transfer-out",
-          tintKey: "info",
-          title: "Payout requested",
-          body: `Your ₹${amountRupees.toFixed(2)} payout to ${upi} is being processed.`,
-          ts: Date.now(),
-          read: false,
-        },
-        ...s.notifs,
-      ],
+      payouts: [{ id: uid(), amountRupees, upi, status: "pending", ts: Date.now() }, ...s.payouts],
+      txns: [{ id: uid(), kind: "payout", title: `Payout to ${upi}`, points: -cost, ts: Date.now() }, ...s.txns],
     }));
     return { ok: true, msg: `Payout of ₹${amountRupees.toFixed(2)} requested.` };
   };
-
-  const markAllRead: Ctx["markAllRead"] = () =>
-    setState((s) => ({ ...s, notifs: s.notifs.map((n) => ({ ...n, read: true })) }));
-
-  const clearNotifs: Ctx["clearNotifs"] = () => setState((s) => ({ ...s, notifs: [] }));
 
   const canPlay: Ctx["canPlay"] = (gameId, cooldownMs) => {
     if (!cooldownMs) return { ok: true, remainingMs: 0 };
@@ -228,22 +232,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { ok: remainingMs <= 0, remainingMs: Math.max(0, remainingMs) };
   };
 
-  const adminAdjust: Ctx["adminAdjust"] = (delta, note) => {
+  const markAllRead: Ctx["markAllRead"] = () =>
+    setState((s) => ({ ...s, notifs: s.notifs.map((n) => ({ ...n, read: true })) }));
+
+  const markNotifRead: Ctx["markNotifRead"] = (id) =>
+    setState((s) => ({ ...s, notifs: s.notifs.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
+
+  const addCustomNotification: Ctx["addCustomNotification"] = ({ title, body }) =>
+    setState((s) => ({
+      ...s,
+      notifs: [
+        { id: uid(), icon: "bullhorn", tintKey: "accentQuiz", title, body, ts: Date.now(), read: false, pinned: true },
+        ...s.notifs,
+      ],
+    }));
+
+  const adminAdjust: Ctx["adminAdjust"] = (delta, note) =>
     setState((s) => ({
       ...s,
       points: Math.max(0, s.points + delta),
       txns: [{ id: uid(), kind: "adjust", title: note, points: delta, ts: Date.now() }, ...s.txns],
     }));
-  };
 
   const setPayoutStatus: Ctx["setPayoutStatus"] = (id, status) => {
-    setState((s) => ({
-      ...s,
-      payouts: s.payouts.map((p) => (p.id === id ? { ...p, status } : p)),
-    }));
+    setState((s) => {
+      const payout = s.payouts.find((p) => p.id === id);
+      const payouts = s.payouts.map((p) => (p.id === id ? { ...p, status } : p));
+      let notifs = s.notifs;
+      if (payout && status === "successful") {
+        notifs = [
+          {
+            id: uid(),
+            icon: "check-decagram",
+            tintKey: "success",
+            title: "Withdrawal successful",
+            body: `₹${payout.amountRupees.toFixed(2)} to ${payout.upi} has been credited.`,
+            ts: Date.now(),
+            read: false,
+          },
+          ...notifs,
+        ];
+      } else if (payout && status === "failed") {
+        notifs = [
+          {
+            id: uid(),
+            icon: "close-octagon",
+            tintKey: "error",
+            title: "Withdrawal rejected",
+            body: `₹${payout.amountRupees.toFixed(2)} to ${payout.upi} was rejected. Points refunded.`,
+            ts: Date.now(),
+            read: false,
+          },
+          ...notifs,
+        ];
+      }
+      // refund points on rejection
+      const points = payout && status === "failed" ? s.points + Math.round(payout.amountRupees * POINTS_PER_RUPEE) : s.points;
+      return { ...s, payouts, notifs, points };
+    });
   };
 
-  const setProfile: Ctx["setProfile"] = (profile) => setState((s) => ({ ...s, profile }));
+  const setProfile: Ctx["setProfile"] = (profile) =>
+    setState((s) => ({ ...s, profile, account: s.account ? { ...s.account, name: profile.name, mobile: profile.mobile } : s.account }));
+
   const setAdminPin: Ctx["setAdminPin"] = (pin) => setState((s) => ({ ...s, adminPin: pin }));
 
   const resetAll: Ctx["resetAll"] = () => setState(seedState());
@@ -262,8 +313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
       if (res.canceled || !res.assets?.[0]) return { ok: false, msg: "Import cancelled." };
-      const content = await FileSystem.readAsStringAsync(res.assets[0].uri);
-      const parsed = JSON.parse(content) as AppState;
+      const parsed = JSON.parse(await FileSystem.readAsStringAsync(res.assets[0].uri)) as AppState;
       if (typeof parsed.points !== "number") return { ok: false, msg: "Invalid backup file." };
       setState({ ...seedState(), ...parsed });
       return { ok: true, msg: "Backup restored successfully." };
@@ -275,12 +325,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: Ctx = {
     ready,
     state,
+    createAccount,
+    login,
+    logout,
     earnPoints,
     requestPayout,
-    markAllRead,
-    clearNotifs,
-    pushNotif,
     canPlay,
+    markAllRead,
+    markNotifRead,
+    addCustomNotification,
     adminAdjust,
     setPayoutStatus,
     setProfile,

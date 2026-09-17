@@ -1,0 +1,40 @@
+{
+  "summary": "Tasklio (offline Expo/RN, black+gold) frontend re-tested on mobile viewport (390x844) via Expo web preview against all NEW items from this iteration. Auth: first-launch AuthModal is mandatory (outside-click, empty submit, invalid 5-digit mobile, mobile mismatch and password mismatch all keep modal open and show toast; valid Name=Altaf/Mobile=9876543210/Password=1234 closes modal and greets user). Home: NO 'Play & Earn' title, NO wallet card, banner one-at-a-time full-width centered with working dots and auto-advance, games rendered in a double-row horizontal scroller; all 14 tiles present using ids [spin, puzzle, quiz, tap, lucky, ttt, hilo, whack, math, snake, n2048, balloon, higher, mine]; Recent activity appears after playing and shows a centered 'View all' navigating to /recent-activity. GameResult screen renders '+X points earned' + trophy + Play again + Home (TTT flow ended with '+0 points earned' on a draw/loss — expected). Notifications: 'Read All' button replaces Clear; no seeded 'Daily rewards are live' spam; earning points did NOT create a notification; admin 'Send custom notification' creates a PINNED entry at top (verified). Admin: profile uses admin-mobile-input (no admin-email-input); PIN 1234 unlocks. Drawer profile shows +91 9876543210 and name Altaf (no email/'@'). Wallet: balance renders (500 pts after admin add), chip 100 + upi test@bank + Request Payout creates a Pending payout card, balance deducts to 400 pts; payout list renders as a VERTICAL full-width card (w=358@x=16 on 390-wide screen). Persistence verified within a session: full reload keeps user logged in and preserves points. No deprecated Expo native packages (expo-av / expo-barcode-scanner / expo-background-fetch) in app code. Deprecated warnings detected: SafeAreaView issues not detected, but 'shadow*' style-props deprecation and 'pointerEvents' prop deprecation warnings still emitted at runtime — flagged for main agent.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "GameResult (Tic-Tac-Toe loss/draw)", "issues": ["On a draw/loss the shared GameResult screen still shows the celebratory trophy + '+0 points earned' which reads oddly. Consider hiding the '+0' or showing a different message ('No points this time — try again!') when awarded points === 0."]}
+    ],
+    "react_native_issues": [
+      {"component": "Global styles", "issue": "Runtime console warns '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Multiple StyleSheet.create blocks still use shadowColor/shadowOffset/shadowOpacity/shadowRadius. Migrate to the new boxShadow API (or use elevation on Android + boxShadow on web/iOS). Reference: repeated on every screen render."},
+      {"component": "Splash / Animated.View", "issue": "Console warns 'props.pointerEvents is deprecated. Use style.pointerEvents.' Move pointerEvents into the style prop. Reference: /app/frontend/app/index.tsx (shimmer overlay)."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "Replace remaining 'shadow*' style props with the new boxShadow API (or elevation for Android) — warnings still fire on every render.",
+    "Move pointerEvents from prop to style on the splash shimmer <Animated.View> to silence the deprecation warning.",
+    "Consider suppressing '+0 points earned' on GameResult for zero-reward outcomes (Tic-Tac-Toe draw/loss shows trophy + '+0' which is misleading UX).",
+    "(Nice-to-have) The GAMES constant uses ids ttt/hilo/math/higher while the review-request lists 'tic-tac-toe/hi-lo/math-blitz/higher-card'. Route slugs match the request but home-game testIDs use the short ids — either is fine, just make sure future testing agents know the short ids."
+  ],
+  "critical_code_review_comments": [
+    "auth-modal.tsx: mandatory (no onRequestClose handler / no backdrop press to close) — correct for a mandatory first-launch account popup.",
+    "app-store.tsx createAccount validates 10-digit mobile, mobile match, password >=4, password match — all cases exercised and rejected properly.",
+    "app-store.tsx setPayoutStatus refunds points on 'failed' and creates the correct notif on 'successful'/'failed' — code path verified by reading; note: my end-to-end click test picked the wrong testID suffix so 'failed'-path notification/refund was NOT exercised UI-side (test-script bug, not an app bug). Recommend main agent quickly confirms visually.",
+    "earnPoints does NOT push a notif for earning — matches requirement 'earning points does NOT create a notification'.",
+    "seedState no longer seeds a 'Daily rewards are live' entry — withDailyReminder is gated by loggedIn+time-of-day+per-day and skipped on first run before 5am; confirmed no spam.",
+    "home.tsx has NO wallet card, NO 'Play & Earn' title, double-row games grid, banner one-per-page and view-all — matches spec.",
+    "drawer-menu.tsx renders +91 {mobile} instead of email — matches spec.",
+    "admin.tsx uses admin-mobile-input (no admin-email-input) — matches spec.",
+    "Persistence: tasklio_state_v3 key with AsyncStorage + FileSystem backup — verified reload keeps loggedIn true and points preserved."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend)", "frontend": "~95% (12/13 new items verified end-to-end; admin 'Set payout Failed → refund + Withdrawal rejected notif' not visually confirmed due to a test-script selector suffix mismatch — logic path in app-store.tsx is correct on code review)"},
+  "seed_data_creation": "None persisted. Created a TEST account (Altaf, 9876543210) and a TEST pinned notification during test runs only; all data lives in AsyncStorage of the ephemeral browser context.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use viewport 390x844. Fresh mcp_browser_automation sessions do NOT preserve localStorage — clear+create-account at the start of each session. Game testIDs on Home use the SHORT ids from /app/frontend/src/constants/games.ts, not the route slugs: home-game-{spin|puzzle|quiz|tap|lucky|ttt|hilo|whack|math|snake|n2048|balloon|higher|mine}. Admin payout status testIDs use FULL words: admin-status-{payoutId}-{pending|successful|failed} (NOT -p/-s/-f). Other useful testIDs: auth-modal, auth-tab-{create|login}, auth-{name|mobile|confirm-mobile|password|confirm-password|submit|forgot}, home-{menu-button|points-badge|bell-button|view-all}, home-banner-*, drawer-{menu|backdrop|close-button|share|rate-us|join-community|help-support|terms-of-use|privacy-policy|restricted-area}, notifications-read-all-button, notification-{id}, admin-{refresh-button|points-input|add-points|remove-points|name-input|mobile-input|save-profile|notif-title|notif-body|send-notif|pin-input|save-pin|export|import|reset}, wallet-{balance|chip-100|chip-500|chip-1000|upi-input|request-button|payout-{id}}, ttt-cell-{0..8}, spin-button, game-result, game-result-points, game-result-play-again, game-result-home. Persistence works within a single browser session; to test the Login tab against the created account within an mcp session, patch localStorage['tasklio_state_v3'] to set loggedIn=false and reload.",
+  "rca_of_issue": "No blocking bugs. Only two long-standing runtime deprecation warnings (shadow* style props; pointerEvents prop) which do not affect functionality but should be migrated for RN 0.76+/web compatibility. GameResult showing '+0 points earned' after a TTT draw/loss is a small UX polish item, not a functional bug."
+}

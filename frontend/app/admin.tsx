@@ -26,13 +26,16 @@ export default function Admin() {
     resetAll,
     exportBackup,
     importBackup,
+    addCustomNotification,
   } = useApp();
   const { showToast } = useToast();
 
   const [pts, setPts] = useState("100");
   const [name, setName] = useState(state.profile.name);
-  const [email, setEmail] = useState(state.profile.email);
+  const [mobile, setMobile] = useState(state.profile.mobile);
   const [newPin, setNewPin] = useState("");
+  const [notifTitle, setNotifTitle] = useState("");
+  const [notifBody, setNotifBody] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
   const totalEarned = state.txns.filter((t) => t.points > 0).reduce((a, t) => a + t.points, 0);
@@ -46,8 +49,16 @@ export default function Admin() {
   };
 
   const saveProfile = () => {
-    setProfile({ name: name.trim() || "Guest", email: email.trim() || "guest@example.com" });
+    setProfile({ name: name.trim() || "Guest", mobile: mobile.trim() });
     showToast("Profile updated.", "success");
+  };
+
+  const sendNotif = () => {
+    if (!notifTitle.trim()) return showToast("Enter a notification title.", "error");
+    addCustomNotification({ title: notifTitle.trim(), body: notifBody.trim() || "Tap to view details." });
+    setNotifTitle("");
+    setNotifBody("");
+    showToast("Custom notification sent (pinned).", "success");
   };
 
   const savePin = () => {
@@ -165,9 +176,20 @@ export default function Admin() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>User profile</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Name" placeholderTextColor={colors.muted} testID="admin-name-input" />
-          <TextInput style={[styles.input, { marginTop: 12 }]} value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.muted} autoCapitalize="none" testID="admin-email-input" />
+          <TextInput style={[styles.input, { marginTop: 12 }]} value={mobile} onChangeText={(t) => setMobile(t.replace(/[^0-9]/g, "").slice(0, 10))} placeholder="Mobile number" placeholderTextColor={colors.muted} keyboardType="number-pad" testID="admin-mobile-input" />
           <Pressable style={styles.wideBtn} onPress={saveProfile} testID="admin-save-profile">
             <Text style={styles.wideBtnText}>Save profile</Text>
+          </Pressable>
+        </View>
+
+        {/* Custom notification */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Send custom notification</Text>
+          <Text style={styles.muted}>Custom notifications are pinned to the top of the user&apos;s notifications.</Text>
+          <TextInput style={styles.input} value={notifTitle} onChangeText={setNotifTitle} placeholder="Title" placeholderTextColor={colors.muted} testID="admin-notif-title" />
+          <TextInput style={[styles.input, { marginTop: 12 }]} value={notifBody} onChangeText={setNotifBody} placeholder="Message" placeholderTextColor={colors.muted} testID="admin-notif-body" />
+          <Pressable style={styles.wideBtn} onPress={sendNotif} testID="admin-send-notif">
+            <Text style={styles.wideBtnText}>Send notification</Text>
           </Pressable>
         </View>
 

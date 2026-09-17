@@ -6,8 +6,8 @@ import Animated, { FadeIn } from "react-native-reanimated";
 
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
+import { GameResult } from "@/src/components/game-result";
 import { useApp } from "@/src/store/app-store";
-import { useToast } from "@/src/components/toast";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const ICONS = ["heart", "star", "diamond-stone", "bell", "flower", "leaf", "lightning-bolt", "cube"];
@@ -27,22 +27,22 @@ export default function Puzzle() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { earnPoints } = useApp();
-  const { showToast } = useToast();
 
   const [deck, setDeck] = useState<Card[]>(buildDeck);
   const [picked, setPicked] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [locked, setLocked] = useState(false);
   const [won, setWon] = useState(false);
+  const [reward, setReward] = useState(0);
 
   const matchedCount = useMemo(() => deck.filter((c) => c.matched).length, [deck]);
 
   useEffect(() => {
     if (matchedCount === deck.length && !won) {
       setWon(true);
-      const reward = Math.max(50, 300 - moves * 10);
-      earnPoints({ gameId: "puzzle", points: reward, title: "Puzzle Dash" });
-      showToast(`Solved in ${moves} moves! +${reward} pts`, "success");
+      const r = Math.max(50, 300 - moves * 10);
+      setReward(r);
+      earnPoints({ gameId: "puzzle", points: r, title: "Puzzle Dash" });
     }
   }, [matchedCount]);
 
@@ -123,14 +123,16 @@ export default function Puzzle() {
           })}
         </View>
 
-        {won ? (
-          <Pressable style={styles.playAgain} onPress={restart} testID="puzzle-play-again">
-            <Text style={styles.playAgainText}>Play again</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.hint}>Fewer moves earn more points (min 50).</Text>
-        )}
+        {won ? null : <Text style={styles.hint}>Fewer moves earn more points (min 50).</Text>}
       </View>
+
+      <GameResult
+        visible={won}
+        title="Puzzle solved!"
+        subtitle={`Completed in ${moves} moves`}
+        points={reward}
+        onPlayAgain={restart}
+      />
     </View>
   );
 }

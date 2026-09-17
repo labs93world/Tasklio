@@ -1,34 +1,38 @@
 # Tasklio — PRD
 
 ## Original Problem Statement
-Tasklio: a rewards + mini-games mobile app. Package `com.altaftech.tasklio`. Professional splash → Home. Later, user asked to replicate 5 reference screenshots (rewards home, notifications, drawer menu, wallet with UPI payouts, admin panel) but with our OWN enhanced theme (NOT the navy from the refs) and to store ALL data on-device so the app runs fully offline.
+Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Professional splash → Home. Replicate reference screenshots (rewards home, notifications, drawer, wallet UPI payouts, admin) with a CUSTOM black+gold theme (not the ref navy). All data stored on-device, fully offline. Later: mandatory account popup, redesigned home, 9 new games, shared reward screen, notification rules, drawer links, vertical wallet history.
 
 ## Architecture
-- Expo Router (React Native), fully client-side, **no backend**.
-- State: React Context store (`src/store/app-store.tsx`) persisted to device via `@/src/utils/storage` (AsyncStorage) + an `expo-file-system` backup file. Export/Import backup via Sharing + DocumentPicker.
-- Theme: custom **obsidian + gold** palette in `src/theme.ts` (matches the gold logo; deliberately different from reference navy).
-- Icons: `@react-native-vector-icons/material-design-icons` (dynamic import, Expo Go compatible).
+- Expo Router, fully client-side, NO backend.
+- State: React Context store (`src/store/app-store.tsx`) persisted via `@/src/utils/storage` (AsyncStorage) + `expo-file-system` backup file; Export/Import via Sharing + DocumentPicker.
+- Theme: custom obsidian + gold in `src/theme.ts`.
+- Icons: `@react-native-vector-icons/material-design-icons` (dynamic import).
 
 ## Screens
-- `/` splash (animated coin badge, rings, shimmer, loading bar) → `/home`
-- `/home` — greeting, points badge, notifications bell (unread dot), banner carousel, game tiles, wallet card, recent activity, slide-in drawer
-- `/wallet` — balance (100 pts = ₹1), amount chips, UPI input, payout request, payout history (Pending/Successful/Failed)
-- `/notifications` — list with unread dots + Clear
-- `/restricted` — PIN gate (default 1234) → `/admin`
-- `/admin` — stats, adjust points, manage payout status, edit profile, change PIN, backup/import/reset
-- `/support`, `/legal/terms`, `/legal/privacy`
-- Games: `/games/spin` (SVG wheel), `/games/puzzle` (memory match), `/games/quiz` (trivia), `/games/tap-race` (10s tap), `/games/lucky` (card draw)
+- `/` splash → `/home`
+- `/home` — greeting, points badge, notifications bell, auto+manual centered banner carousel, DOUBLE-ROW games grid (14 games), recent activity + "View all"; MANDATORY AuthModal on first launch (Create/Login, Forgot→Help&Support)
+- `/wallet` — balance, chips, UPI input, payout request, VERTICAL payout history
+- `/notifications` — Read All, unread until tapped, pinned custom on top; only Withdrawal success/reject, 5am daily reminder, admin custom
+- `/recent-activity` — full transaction history
+- `/restricted` (PIN 1234) → `/admin` (adjust points, payout status, profile name+mobile, PIN, custom notification, backup/import/reset)
+- `/legal/terms`, `/legal/privacy`
+- Games (14): spin, puzzle, quiz, tap-race, lucky, tic-tac-toe, hi-lo, whack, math-blitz, snake, n2048, balloon, higher-card, mine — all end on shared GameResult reward screen.
+
+## Auth (local, offline)
+- Account = { name, mobile, passwordHash (simple hash) } stored in device state. No OTP, no server.
+
+## Drawer links (hardcoded)
+- Share/Rate: Play Store URL for com.altaftech.tasklio
+- Community: https://t.me/tasklio93
+- Help & Support: mailto labs93world@gmail.com subject "About Tasklio App"
 
 ## Implemented (2026-06)
-- Full offline rewards app matching all 5 reference features, own gold theme.
-- 5 playable games awarding points; wallet payouts; notifications; drawer; PIN-gated admin.
-- Local persistence + Export/Import backup. Tested 12/12 flows pass.
-- Package id set to `com.altaftech.tasklio`; logo used as icon/splash.
+- Offline app matching all reference features + all requested changes; 14 games; local persistence + backup. Testing iterations 1 & 2 pass.
+- Package id `com.altaftech.tasklio`; logo as icon/splash.
 
 ## Known limitation
-- Surviving a full app "clear data"/uninstall requires the Export backup file (import to restore). Pure local storage alone is wiped by the OS on clear-data; backup file gives best-effort recovery.
+- Surviving full app "clear data"/uninstall needs the Export backup file (import to restore).
 
 ## Backlog / Next
-- More games / daily streak bonuses.
-- Real payout gateway (needs backend + user's provider) — currently local status simulation via admin.
-- Optional cloud sync/auth if user ever wants cross-device data.
+- Daily streak bonuses; scratch card / jackpot; real payout gateway (needs backend); optional cloud sync.
