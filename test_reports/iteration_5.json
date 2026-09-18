@@ -1,0 +1,34 @@
+{
+  "summary": "Tasklio iter 5 (frontend-only, Expo web preview @ 390x844) — ALL 6 review items PASS end-to-end. (1) Wallet Thank-you popup: created account, admin-adjusted +100 pts, entered UPI 'altaf@okhdfc' with 100 chip, tapped 'wallet-request-button' → 'wallet-thanks-dialog' rendered with 'Thank you!' + body text 'Your payout request has been received…' (NOT the old toast — legacy 'Payout of ₹…' toast text is absent from DOM). Tapping 'wallet-thanks-ok' closed the modal and auto-switched active tab to Payout history; balance deducted from 100→0 pts; a Pending row was inserted. (2) Hint position: with empty UPI + 100 chip, 'wallet-hint' shows 'Add a valid UPI ID to continue.' at y=406 and 'wallet-request-button' at y=443 — hint is ABOVE the button (Δ=37px). Hint disappears once UPI matches regex. (3) Payout history redesign: rows have left bank icon (bank-transfer-out) → title '₹1.00' → UPI subtitle 'altaf@okhdfc' → date subtext '18 Sept · 09:35' → right pill with icon + label. No colored/gold card border (surfaceSecondary bg + neutral border). Screenshot confirms Rejected pill uses error tint text on neutral pill bg. (4) Admin → Manage payouts: setting a pending payout to Successful updated the wallet pill to 'Successful' (green check); setting another to Failed updated pill to 'Rejected' (red X) — and refunded 100 pts to balance + added a 'Payout rejected · refund for altaf@okhdfc' entry to Recent activity. (5) Home header spacing: paddingTop = insets.top + 16; web insets.top=0 so menu button top y=16 with additional 14px padding-bottom = header baseline is comfortable and non-cramped (visually verified on 390-wide viewport). On device the safe-area inset will add native status-bar height on top of the 16. (6) Account-creation popup (regression): auth modal renders on fresh state; all four error toasts fire correctly — invalid mobile ('Enter a valid 10-digit mobile number.'), mismatched mobiles ('Mobile numbers do not match.'), short password ('Password must be at least 4 characters.'), mismatched passwords ('Passwords do not match.'). Successful create with valid data shows 'Welcome, Altaf!' toast AND dismisses the modal (auth-modal query returns null) — home screen becomes reachable. No regressions observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Global styles", "issue": "Carry-over from prior iterations (still unresolved): 'shadow*' style props emit deprecation warnings on web — migrate to boxShadow API. Reference: multiple StyleSheet blocks across screens."},
+      {"component": "Splash Animated.View", "issue": "Carry-over from prior iterations (still unresolved): props.pointerEvents is deprecated — move into style.pointerEvents. Reference: /app/frontend/app/index.tsx."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "None functional — all 6 items in this iteration verified. (Optional carry-over cosmetic: shadow*→boxShadow, splash pointerEvents move into style.)"
+  ],
+  "critical_code_review_comments": [
+    "wallet.tsx: onRequest (line 42) sets setThanks(true) on success — no showToast call for the success path, only for error. Correct.",
+    "wallet.tsx dialog (line 221-243): Modal is transparent + animationType='fade' + statusBarTranslucent; 'Got it' handler both closes and setTab('payouts') in the same render, so the tab switch happens as the modal fades out. Verified.",
+    "wallet.tsx (line 114-120): the hint block is unconditionally rendered ABOVE the Pressable Request button in JSX order — hint y < button y confirmed at runtime.",
+    "wallet.tsx STATUS_STYLE (line 18-22): 'failed' key maps to label 'Rejected' with error tint + close-circle icon. Verified in DOM ('Rejected' text present on the failed row).",
+    "wallet.tsx payoutRow (line 308-317): styling uses colors.border (neutral) and surfaceSecondary bg — no branded gold border. Pill uses colors.surfaceTertiary bg with per-status tint text only.",
+    "home.tsx header (line 81): paddingTop: insets.top + 16 gives comfortable clearance above 'Hii, <name>' row on real devices; on web insets.top=0 but the 16-px base padding is still present.",
+    "app-store.tsx setPayoutStatus (line 293-333): guards double-refund with `payout.status !== 'failed'` before adding refund entry — verified: rejecting once refunds 100 pts and adds exactly one refund txn.",
+    "auth-modal.tsx submit (line 30-36): result msg is shown via toast for both branches; on ok the parent AuthModal is unmounted when state.loggedIn flips (home.tsx line 218 gates visible={!state.loggedIn}) — modal auto-dismisses. Regression fully working."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend)", "frontend": "100% (6/6 review items verified end-to-end with UI assertions + DOM/text scrape + before/after state checks)"},
+  "seed_data_creation": "One throwaway in-app account (Altaf / 9876543210) in the ephemeral browser context. No persistent seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auth: fill fields by testID 'auth-name'/'auth-mobile'/'auth-confirm-mobile'/'auth-password'/'auth-confirm-password'; submit 'auth-submit'. Admin access via drawer 'drawer-restricted-area' — DOUBLE-click within 400ms opens 'access-key-dialog', hardcoded key '9372@Altaf93Tasklio' → /admin. Adjust points: type into 'admin-points-input' then click 'admin-add-points'. Manage-payouts pills testIDs are 'admin-status-<payoutId>-pending' / '-successful' / '-failed'. Wallet payout rows: 'wallet-payout-<id>'. Thank-you dialog: 'wallet-thanks-dialog' + 'wallet-thanks-ok'. Hint testID 'wallet-hint' only renders when !canRequest. Wallet balance testID 'wallet-balance'. All flows verified.",
+  "rca_of_issue": "No bugs found. The suspected account-creation bug is not reproducible on a fresh browser context — 'Welcome, <name>!' toast fires and the auth modal is dismissed because home.tsx re-renders with visible={!state.loggedIn}=false. Prior report of 'popup not dismissing' likely stemmed from a stale AsyncStorage state where state.loggedIn had already been persisted true, causing the modal not to appear on that session (rather than not dismissing). If the user still hits it, ask them to reproduce on a truly fresh state (uninstall/clear or use the drawer 'Reset app' equivalent — currently removed; recommend adding a devtools reset action, tracked separately)."
+}

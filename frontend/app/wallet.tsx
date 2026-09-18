@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, TextInput } from "react-native";
+import { View, Text, Pressable, TextInput, Modal } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,10 +15,10 @@ import { makeStyles, useTheme } from "@/src/theme";
 
 const CHIPS = [100, 500, 1000];
 
-const STATUS_STYLE: Record<PayoutStatus, { label: string; key: "warning" | "success" | "error" }> = {
-  pending: { label: "Pending", key: "warning" },
-  successful: { label: "Successful", key: "success" },
-  failed: { label: "Failed", key: "error" },
+const STATUS_STYLE: Record<PayoutStatus, { label: string; key: "warning" | "success" | "error"; icon: string }> = {
+  pending: { label: "Pending", key: "warning", icon: "clock-outline" },
+  successful: { label: "Successful", key: "success", icon: "check-circle" },
+  failed: { label: "Rejected", key: "error", icon: "close-circle" },
 };
 
 export default function Wallet() {
@@ -32,6 +32,7 @@ export default function Wallet() {
   const [selected, setSelected] = useState(100);
   const [upi, setUpi] = useState("");
   const [tab, setTab] = useState<"activity" | "payouts">("activity");
+  const [thanks, setThanks] = useState(false);
 
   const recent = state.txns.slice(0, 10);
 
@@ -40,8 +41,12 @@ export default function Wallet() {
 
   const onRequest = () => {
     const res = requestPayout(rupees, upi.trim());
-    showToast(res.msg, res.ok ? "success" : "error");
-    if (res.ok) setUpi("");
+    if (res.ok) {
+      setUpi("");
+      setThanks(true);
+    } else {
+      showToast(res.msg, "error");
+    }
   };
 
   return (
@@ -105,6 +110,15 @@ export default function Wallet() {
           />
         </View>
 
+        {/* Error label above the request button */}
+        {!canRequest ? (
+          <Text style={styles.hint} testID="wallet-hint">
+            {state.points < selected
+              ? `You need ${formatPoints(selected)} pts for this payout.`
+              : "Add a valid UPI ID to continue."}
+          </Text>
+        ) : null}
+
         {/* Request button */}
         <Pressable
           onPress={onRequest}
@@ -117,13 +131,6 @@ export default function Wallet() {
           </Text>
           <Icon name="arrow-right" size={22} color={canRequest ? colors.onBrand : colors.muted} />
         </Pressable>
-        {!canRequest ? (
-          <Text style={styles.hint}>
-            {state.points < selected
-              ? `You need ${formatPoints(selected)} pts for this payout.`
-              : "Add a valid UPI ID to continue."}
-          </Text>
-        ) : null}
 
         {/* History — selectable category: recent activity or payout history */}
         <View style={styles.segWrap} testID="wallet-history-tabs">
@@ -185,24 +192,22 @@ export default function Wallet() {
             <Text style={styles.emptyText}>No payouts yet. Redeem your points to see them here.</Text>
           </View>
         ) : (
-          <View style={{ gap: 14 }}>
+          <View style={{ gap: 12 }}>
             {state.payouts.map((p) => {
               const ss = STATUS_STYLE[p.status];
               const tint = colors[ss.key];
               return (
-                <View
-                  key={p.id}
-                  style={[styles.payoutCard, { borderColor: tint }]}
-                  testID={`wallet-payout-${p.id}`}
-                >
-                  <View style={styles.payoutTop}>
-                    <Text style={styles.payoutAmt}>{formatRupees(p.amountRupees)}</Text>
-                    <Text style={styles.payoutUpi} numberOfLines={1}>
-                      {p.upi}
-                    </Text>
+                <View key={p.id} style={styles.payoutRow} testID={`wallet-payout-${p.id}`}>
+                  <View style={styles.payoutIcon}>
+                    <Icon name="bank-transfer-out" size={22} color={colors.brandPrimary} />
                   </View>
-                  <View style={styles.payoutBottom}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.payoutAmt}>{formatRupees(p.amountRupees)}</Text>
+                    <Text style={styles.payoutUpi} numberOfLines={1}>{p.upi}</Text>
                     <Text style={styles.payoutDate}>{formatDateShort(p.ts)}</Text>
+                  </View>
+                  <View style={[styles.statusPill, { backgroundColor: colors.surfaceTertiary }]}>
+                    <Icon name={ss.icon} size={13} color={tint} />
                     <Text style={[styles.payoutStatus, { color: tint }]}>{ss.label}</Text>
                   </View>
                 </View>
@@ -211,6 +216,31 @@ export default function Wallet() {
           </View>
         )}
       </KeyboardAwareScrollView>
+
+      {/* Thank-you popup after requesting a payout */}
+      <Modal visible={thanks} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setThanks(false)}>
+        <View style={styles.dialogBackdrop}>
+          <View style={styles.dialog} testID="wallet-thanks-dialog">
+            <View style={styles.dialogIcon}>
+              <Icon name="check-decagram" size={40} color={colors.brandPrimary} />
+            </View>
+            <Text style={styles.dialogTitle}>Thank you!</Text>
+            <Text style={styles.dialogBody}>
+              Your payout request has been received and is being processed. You can track its status in Payout history.
+            </Text>
+            <Pressable
+              style={styles.dialogBtn}
+              onPress={() => {
+                setThanks(false);
+                setTab("payouts");
+              }}
+              testID="wallet-thanks-ok"
+            >
+              <Text style={styles.dialogBtnText}>Got it</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -275,17 +305,27 @@ const useStyles = makeStyles((colors) => ({
   viewAllText: { color: colors.brandPrimary, fontSize: 16, fontWeight: "800" },
   empty: { alignItems: "center", gap: 12, paddingVertical: 24, paddingHorizontal: 30 },
   emptyText: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
-  payoutCard: {
-    width: "100%",
+  payoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     borderRadius: 16,
-    borderWidth: 1.5,
-    padding: 16,
+    padding: 14,
     backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  payoutTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  payoutAmt: { color: colors.onSurface, fontSize: 22, fontWeight: "900" },
-  payoutUpi: { color: colors.muted, fontSize: 13, flexShrink: 1, textAlign: "right" },
-  payoutBottom: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18 },
-  payoutDate: { color: colors.muted, fontSize: 12 },
-  payoutStatus: { fontSize: 13, fontWeight: "800" },
+  payoutIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
+  payoutAmt: { color: colors.onSurface, fontSize: 18, fontWeight: "900" },
+  payoutUpi: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 2 },
+  payoutDate: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
+  payoutStatus: { fontSize: 12, fontWeight: "800" },
+  dialogBackdrop: { flex: 1, backgroundColor: "rgba(5,5,7,0.85)", alignItems: "center", justifyContent: "center", padding: 28 },
+  dialog: { width: "100%", maxWidth: 340, backgroundColor: colors.surfaceSecondary, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 24, alignItems: "center" },
+  dialogIcon: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  dialogTitle: { color: colors.onSurface, fontSize: 22, fontWeight: "900" },
+  dialogBody: { color: colors.onSurfaceSecondary, fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 10 },
+  dialogBtn: { backgroundColor: colors.brandPrimary, borderRadius: 14, paddingVertical: 15, alignItems: "center", marginTop: 22, alignSelf: "stretch" },
+  dialogBtnText: { color: colors.onBrand, fontSize: 16, fontWeight: "800" },
 }));

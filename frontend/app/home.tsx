@@ -78,7 +78,7 @@ export default function Home() {
     <View style={styles.container} testID="home-screen">
       <StatusBar style="light" />
 
-      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Pressable onPress={() => setDrawer(true)} hitSlop={10} style={styles.hMenu} testID="home-menu-button">
           <Icon name="menu" size={24} color={colors.onSurface} />
         </Pressable>
@@ -231,7 +231,7 @@ export default function Home() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10, backgroundColor: colors.surface },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, backgroundColor: colors.surface },
   hMenu: { width: 32, height: 40, alignItems: "flex-start", justifyContent: "center" },
   hCenter: { flex: 1, marginLeft: 6 },
   greeting: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },

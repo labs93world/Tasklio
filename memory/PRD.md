@@ -56,3 +56,11 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Drawer "Restricted Area" faded (opacity 0.45); double-tap opens Access Key dialog (no hint); key 9372@Altaf93Tasklio → /admin, wrong key → innocuous Thank-you popup.
 - Admin: removed PIN entry screen (/restricted deleted), Change admin PIN section, and Data & backup (export/import/reset). Admin reached only via drawer access key.
 - Testing iteration 4: 8/8 pass.
+
+## Session Log (2026-09-18, iteration 5)
+- Wallet: Request Payout now shows a Thank-you popup (wallet-thanks-dialog) instead of a toast; payout still recorded (points deducted, pending row), "Got it" switches to Payout history tab.
+- Wallet: validation hint (wallet-hint) moved ABOVE the Request Payout button.
+- Wallet: Payout history redesigned — clean row (bank icon + amount/upi/datetime + right status pill), no colored border; "failed" now labelled "Rejected".
+- Home header: more top spacing (insets.top + 16).
+- Verified account-creation popup works correctly (no bug); all error toasts + success path confirmed.
+- Testing iteration 5: 6/6 pass.
