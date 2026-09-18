@@ -36,3 +36,7 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 
 ## Backlog / Next
 - Daily streak bonuses; scratch card / jackpot; real payout gateway (needs backend); optional cloud sync.
+
+## Session Log (2026-09-18)
+- Imported GitHub project `labs93world/Tasklio` into this workspace (git remote connected, full history present).
+- Verified all services running (expo, backend, mongodb) and confirmed the app renders correctly on web preview (splash + mandatory auth modal visible).
