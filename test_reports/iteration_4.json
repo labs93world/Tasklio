@@ -1,0 +1,37 @@
+{
+  "summary": "Tasklio iteration 4 (frontend-only, Expo web preview, 390x844) — all 8 requested changes + regression pass end-to-end. (1) Quiz Time: answering all 5 as wrong reaches the SHARED GameResult overlay (testID 'game-result') with 'No points this time' text at 'game-result-points'; 'game-result-play-again' restarts the quiz and 'game-result-home' returns to /home. (2) No '+0' history: verified via localStorage — before quiz txns=0, after 0-pt quiz txns=0 (earnPoints skips txn when points===0). (3) Home header compact: 'Hii, Alta Tester' greeting + subtext 'Let's earn some rewards today' both render; menu, points badge, and bell all present with tight spacing (single row, no gaps). (4) Games row: exactly the 9 remaining tiles present (home-game-spin/puzzle/quiz/ttt/hilo/whack/math/n2048/mine); 4.5 tiles visible at once in 390px viewport (screenshot confirms Mine Pick tile clipped on the right); deleted tiles absent (tap/lucky/snake/balloon/higher). Direct navigation to /games/tap-race, /games/lucky, /games/snake, /games/balloon, /games/higher-card ALL hit Expo Router's 'Unmatched Route' screen. (5) Daily Check-in: for fresh account 'home-checkin-card' + 'home-checkin-claim' visible, Day 1 of 7; clicking Claim opens GameResult popup with '+10 points earned'; after dismissing popup the checkin card is HIDDEN (canClaimCheckin false) and localStorage points=10, txns=1. (6) Drawer Restricted Area: computed opacity=0.45 (faded); SINGLE tap does not open dialog; DOUBLE tap within 400ms opens 'access-key-dialog'; wrong key ('wrongkey') → 'thanks-dialog' visible with 'thanks-close' present; correct key '9372@Altaf93Tasklio' → navigates to /admin. (7) Admin (/admin): 'Admin Panel' header + Adjust points / Manage payouts / User profile / Send custom notification sections ALL present; 'Change admin PIN', 'Backup', 'Export', 'Import', 'Reset app' NONE present. (8) Old /restricted route removed — shows Unmatched Route. Regression: create-account flow works, /wallet renders with 'wallet-tab-activity' and 'wallet-tab-payouts' tabs and payout request card.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": [
+      {"component": "Global styles", "issue": "Pre-existing carry-over from iter 2/3, still unresolved on code review: 'shadow*' style props deprecation warning — migrate to boxShadow API. Reference: multiple StyleSheet blocks across screens."},
+      {"component": "Splash Animated.View", "issue": "Pre-existing carry-over from iter 2/3, still unresolved: props.pointerEvents deprecated — move into style.pointerEvents. Reference: /app/frontend/app/index.tsx."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "(Carry-over, cosmetic) Migrate shadow* style props to boxShadow; move pointerEvents into style on splash shimmer.",
+    "(Optional) Consider dead-code cleanup in /app/frontend/src/store/app-store.tsx: setAdminPin, resetAll, exportBackup, importBackup and the `adminPin` field are now unreachable from the UI after removing the PIN entry screen and Backup/Restore sections. Not a bug — but the fields still ship in every persisted state blob and increase surface area.",
+    "No functional fixes required — all 8 requested changes pass."
+  ],
+  "critical_code_review_comments": [
+    "quiz.tsx (lines 52-56): final result is computed as `correct + (isRight ? 1 : 0)` at the terminal question so the last click is counted correctly; earnPoints is invoked once regardless of points; setResult opens the shared GameResult overlay. Good.",
+    "game-result.tsx (line 43): '+N points earned' vs 'No points this time' branching is correct; overlay uses zIndex 50 with absolute fill so it correctly covers the quiz body.",
+    "app-store.tsx earnPoints (line 234): `points !== 0` guard skips the txn entry — matches requirement verified in localStorage.",
+    "app-store.tsx canClaimCheckin/nextCheckinDay + claimDailyCheckin (lines 79-86, 238-249): streak progresses only if lastClaim === yesterday, else resets to Day 1; today's claim writes lastClaim=todayKey which hides the card.",
+    "drawer-menu.tsx (lines 48-57): double-tap threshold is 400ms via `lastTap` ref — verified visually. Restricted row has opacity: 0.45 baked into styles (line 213).",
+    "drawer-menu.tsx submitKey (lines 59-69): correct key routes to /admin via router.push (not replace) so back button works. Wrong key opens the innocuous thanks dialog with no error surface.",
+    "admin.tsx: fully cleaned — no PIN input, no Backup/Restore/Export/Import section, no reset button. Verified via body text scrape.",
+    "games.ts: GAMES array is exactly the 9 approved games; deleted games removed and their files removed from /app/frontend/app/games/ (verified by ls).",
+    "Note: app-store.tsx still exports setAdminPin/resetAll/exportBackup/importBackup and keeps `adminPin: '1234'` in seedState() — dead code post-cleanup (see action item)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend)", "frontend": "100% (8/8 feature groups + regression verified end-to-end with UI + localStorage state assertions)"},
+  "seed_data_creation": "Two throwaway accounts in ephemeral browser contexts (Alta Tester/9876543210 and Regress/9000000001). No persistent seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "localStorage key is 'tasklio_state_v3' and is DOUBLE-ENCODED JSON on web (JSON.parse twice). Clear localStorage each session for a fresh account + unclaimed check-in. Auth: fill by placeholder (Name / 'Mobile number' / 'Confirm mobile number' / Password / 'Confirm password'), submit via testID 'auth-submit'. Quiz deterministic-0 trick: BANK answers in /app/frontend/app/games/quiz.tsx are only 1/2/3, so clicking quiz-option-0 five times guarantees 0-point outcome. Drawer restricted: force scrollIntoView on 'drawer-restricted-area' before clicking (it sits below the 6-item menu list). Double-tap = two clicks within 400ms on same element. Admin access key (hardcoded): 9372@Altaf93Tasklio. Deleted games routes now hit Expo Router 'Unmatched Route' page.",
+  "rca_of_issue": "No new bugs found this iteration. All previously reported issues (+0 history bug, refund entry bug) remain fixed. The only code smell is dead code in app-store.tsx from the removed Backup/Restore/PIN features."
+}

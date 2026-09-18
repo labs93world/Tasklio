@@ -46,3 +46,13 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Rejected payouts now add a refund entry to Recent activity (+refund, bank-transfer-in icon) alongside the points refund; guarded against double-refund on status toggling.
 - Compacted home header (smaller icons/text, edge-hugging menu + bell, explicit spacing) and drawer menu (smaller avatar, tighter rows).
 - Testing iteration 3: all pass.
+
+## Session Log (2026-09-18, iteration 4)
+- Quiz Time now ends with the shared GameResult popup (like other games); zero-point outcomes create no history entry.
+- Compact home header: smaller "Hii, <name>" + subtext "Let's earn some rewards today"; tighter menu/points/bell spacing.
+- Games row spacing reduced so ~4.5 tiles are visible; tiles 68px, gap 12.
+- Deleted 5 games entirely (files + routes + constants): Tap Race, Lucky Draw, Snake, Balloon Pop, Higher Card. Remaining 9: Spin & Win, Puzzle Dash, Quiz Time, Tic Tac Toe, Hi-Lo, Whack-a-Mole, Math Blitz, 2048, Mine Pick.
+- New Daily Check-in card below banners: hidden once claimed today; 7-day increasing streak (10/20/35/50/75/100/150) tracked via checkin{lastClaim,streak}; Claim shows reward popup. Store: claimDailyCheckin, canClaimCheckin, nextCheckinDay, CHECKIN_REWARDS, todayKey exported.
+- Drawer "Restricted Area" faded (opacity 0.45); double-tap opens Access Key dialog (no hint); key 9372@Altaf93Tasklio → /admin, wrong key → innocuous Thank-you popup.
+- Admin: removed PIN entry screen (/restricted deleted), Change admin PIN section, and Data & backup (export/import/reset). Admin reached only via drawer access key.
+- Testing iteration 4: 8/8 pass.

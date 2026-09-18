@@ -1,7 +1,8 @@
-import { Modal, Pressable, ScrollView, Share, Text, View, Linking } from "react-native";
+import { useRef, useState } from "react";
+import { Modal, Pressable, ScrollView, Share, Text, TextInput, View, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
 
 import { Icon } from "@/src/components/icon";
 import { useApp } from "@/src/store/app-store";
@@ -11,6 +12,8 @@ import { makeStyles, useTheme } from "@/src/theme";
 
 type Props = { visible: boolean; onClose: () => void };
 
+const ACCESS_KEY = "9372@Altaf93Tasklio";
+
 export function DrawerMenu({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
@@ -18,6 +21,11 @@ export function DrawerMenu({ visible, onClose }: Props) {
   const router = useRouter();
   const { state } = useApp();
   const { showToast } = useToast();
+
+  const [keyModal, setKeyModal] = useState(false);
+  const [thanksModal, setThanksModal] = useState(false);
+  const [accessKey, setAccessKey] = useState("");
+  const lastTap = useRef(0);
 
   const go = (path: string) => {
     onClose();
@@ -34,6 +42,30 @@ export function DrawerMenu({ visible, onClose }: Props) {
   const onShare = () => {
     onClose();
     setTimeout(() => Share.share({ message: SHARE_MESSAGE }).catch(() => {}), 220);
+  };
+
+  // Restricted area opens only on a double tap, then asks for the access key.
+  const onRestrictedPress = () => {
+    const now = Date.now();
+    if (now - lastTap.current < 400) {
+      lastTap.current = 0;
+      setAccessKey("");
+      setKeyModal(true);
+    } else {
+      lastTap.current = now;
+    }
+  };
+
+  const submitKey = () => {
+    const val = accessKey.trim();
+    setKeyModal(false);
+    setAccessKey("");
+    if (val === ACCESS_KEY) {
+      onClose();
+      setTimeout(() => router.push("/admin" as any), 220);
+    } else {
+      setThanksModal(true);
+    }
   };
 
   const items = [
@@ -90,13 +122,55 @@ export function DrawerMenu({ visible, onClose }: Props) {
             ))}
           </View>
 
-          <Pressable style={styles.restricted} onPress={() => go("/restricted")} testID="drawer-restricted-area">
-            <Icon name="shield-lock" size={20} color={colors.brandPrimary} />
+          <Pressable style={styles.restricted} onPress={onRestrictedPress} testID="drawer-restricted-area">
+            <Icon name="shield-lock" size={20} color={colors.muted} />
             <Text style={styles.restrictedLabel}>Restricted Area</Text>
-            <Icon name="chevron-right" size={20} color={colors.brandPrimary} />
+            <Icon name="chevron-right" size={20} color={colors.muted} />
           </Pressable>
         </ScrollView>
       </Animated.View>
+
+      {/* Access key prompt (no hint) */}
+      <Modal visible={keyModal} transparent animationType="fade" onRequestClose={() => setKeyModal(false)}>
+        <Pressable style={styles.centerBackdrop} onPress={() => setKeyModal(false)}>
+          <Pressable style={styles.dialog} onPress={() => {}} testID="access-key-dialog">
+            <View style={styles.dialogIcon}>
+              <Icon name="key-variant" size={26} color={colors.brandPrimary} />
+            </View>
+            <Text style={styles.dialogTitle}>Access Key</Text>
+            <TextInput
+              style={styles.keyInput}
+              value={accessKey}
+              onChangeText={setAccessKey}
+              placeholder="Enter access key"
+              placeholderTextColor={colors.muted}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="access-key-input"
+            />
+            <Pressable style={styles.dialogBtn} onPress={submitKey} testID="access-key-submit">
+              <Text style={styles.dialogBtnText}>Continue</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Innocuous "thanks" popup on wrong key */}
+      <Modal visible={thanksModal} transparent animationType="fade" onRequestClose={() => setThanksModal(false)}>
+        <Pressable style={styles.centerBackdrop} onPress={() => setThanksModal(false)}>
+          <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.dialog} testID="thanks-dialog">
+            <View style={[styles.dialogIcon, { backgroundColor: colors.brandSecondary }]}>
+              <Icon name="heart" size={26} color={colors.brandPrimary} />
+            </View>
+            <Text style={styles.dialogTitle}>Thank you!</Text>
+            <Text style={styles.dialogBody}>Thanks for being with Tasklio. Keep playing to earn more rewards!</Text>
+            <Pressable style={styles.dialogBtn} onPress={() => setThanksModal(false)} testID="thanks-close">
+              <Text style={styles.dialogBtnText}>You&apos;re welcome</Text>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </Modal>
   );
 }
@@ -134,8 +208,28 @@ const useStyles = makeStyles((colors) => ({
     marginTop: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.brandPrimary,
-    backgroundColor: colors.brandSecondary,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceTertiary,
+    opacity: 0.45,
   },
-  restrictedLabel: { flex: 1, color: colors.brandPrimary, fontSize: 15, fontWeight: "700" },
+  restrictedLabel: { flex: 1, color: colors.onSurfaceTertiary, fontSize: 15, fontWeight: "700" },
+  centerBackdrop: { flex: 1, backgroundColor: "rgba(5,5,7,0.82)", alignItems: "center", justifyContent: "center", padding: 32 },
+  dialog: { width: "100%", maxWidth: 340, backgroundColor: colors.surfaceSecondary, borderRadius: 22, padding: 24, alignItems: "center", borderWidth: 1, borderColor: colors.border },
+  dialogIcon: { width: 60, height: 60, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.brandPrimary },
+  dialogTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "900", marginTop: 16 },
+  dialogBody: { color: colors.onSurfaceTertiary, fontSize: 14, textAlign: "center", marginTop: 10, lineHeight: 20 },
+  keyInput: {
+    width: "100%",
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.onSurface,
+    fontSize: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 18,
+  },
+  dialogBtn: { width: "100%", backgroundColor: colors.brandPrimary, borderRadius: 14, paddingVertical: 15, alignItems: "center", marginTop: 16 },
+  dialogBtnText: { color: colors.onBrand, fontSize: 16, fontWeight: "800" },
 }));

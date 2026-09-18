@@ -52,7 +52,11 @@ export type AppState = {
   cooldowns: Record<string, number>;
   adminPin: string;
   lastDailyReminder: string; // yyyy-mm-dd
+  checkin: { lastClaim: string; streak: number }; // yyyy-mm-dd + current day 1-7
 };
+
+// Daily check-in rewards grow across a 7-day streak, then cycle back to day 1.
+export const CHECKIN_REWARDS = [10, 20, 35, 50, 75, 100, 150];
 
 function simpleHash(s: string): string {
   let h = 5381;
@@ -60,9 +64,25 @@ function simpleHash(s: string): string {
   return h.toString(16);
 }
 
-function todayKey(): string {
+export function todayKey(): string {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+// The day (1-7) that will be claimed next given the current streak state.
+export function nextCheckinDay(s: AppState): number {
+  if (s.checkin.lastClaim === yesterdayKey()) return (s.checkin.streak % 7) + 1;
+  return 1;
+}
+
+export function canClaimCheckin(s: AppState): boolean {
+  return s.loggedIn && s.checkin.lastClaim !== todayKey();
 }
 
 function seedState(): AppState {
@@ -77,6 +97,7 @@ function seedState(): AppState {
     cooldowns: {},
     adminPin: "1234",
     lastDailyReminder: "",
+    checkin: { lastClaim: "", streak: 0 },
   };
 }
 
@@ -117,6 +138,7 @@ type Ctx = {
   logout: () => void;
   // gameplay
   earnPoints: (opts: { gameId?: string; points: number; title: string }) => void;
+  claimDailyCheckin: () => { reward: number; day: number } | null;
   requestPayout: (amountRupees: number, upi: string) => AuthResult;
   canPlay: (gameId: string, cooldownMs: number) => { ok: boolean; remainingMs: number };
   // notifications
@@ -211,6 +233,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // don't record a history entry when nothing was earned
       txns: points !== 0 ? [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
     }));
+  };
+
+  const claimDailyCheckin: Ctx["claimDailyCheckin"] = () => {
+    if (!canClaimCheckin(state)) return null;
+    const day = nextCheckinDay(state);
+    const reward = CHECKIN_REWARDS[day - 1];
+    setState((s) => ({
+      ...s,
+      points: s.points + reward,
+      checkin: { lastClaim: todayKey(), streak: day },
+      txns: [{ id: uid(), kind: "earn", title: `Daily check-in · Day ${day}`, points: reward, ts: Date.now() }, ...s.txns],
+    }));
+    return { reward, day };
   };
 
   const requestPayout: Ctx["requestPayout"] = (amountRupees, upi) => {
@@ -334,6 +369,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     earnPoints,
+    claimDailyCheckin,
     requestPayout,
     canPlay,
     markAllRead,

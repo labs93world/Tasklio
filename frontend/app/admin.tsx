@@ -22,10 +22,6 @@ export default function Admin() {
     adminAdjust,
     setPayoutStatus,
     setProfile,
-    setAdminPin,
-    resetAll,
-    exportBackup,
-    importBackup,
     addCustomNotification,
   } = useApp();
   const { showToast } = useToast();
@@ -33,7 +29,6 @@ export default function Admin() {
   const [pts, setPts] = useState("100");
   const [name, setName] = useState(state.profile.name);
   const [mobile, setMobile] = useState(state.profile.mobile);
-  const [newPin, setNewPin] = useState("");
   const [notifTitle, setNotifTitle] = useState("");
   const [notifBody, setNotifBody] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -59,23 +54,6 @@ export default function Admin() {
     setNotifTitle("");
     setNotifBody("");
     showToast("Custom notification sent (pinned).", "success");
-  };
-
-  const savePin = () => {
-    if (!/^\d{4,6}$/.test(newPin)) return showToast("PIN must be 4-6 digits.", "error");
-    setAdminPin(newPin);
-    setNewPin("");
-    showToast("Admin PIN changed.", "success");
-  };
-
-  const onExport = async () => {
-    await exportBackup();
-    showToast("Backup exported. Save it to Drive or Files.", "success");
-  };
-
-  const onImport = async () => {
-    const res = await importBackup();
-    showToast(res.msg, res.ok ? "success" : "error");
   };
 
   const stats = [
@@ -190,51 +168,6 @@ export default function Admin() {
           <TextInput style={[styles.input, { marginTop: 12 }]} value={notifBody} onChangeText={setNotifBody} placeholder="Message" placeholderTextColor={colors.muted} testID="admin-notif-body" />
           <Pressable style={styles.wideBtn} onPress={sendNotif} testID="admin-send-notif">
             <Text style={styles.wideBtnText}>Send notification</Text>
-          </Pressable>
-        </View>
-
-        {/* PIN */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Change admin PIN</Text>
-          <TextInput
-            style={styles.input}
-            value={newPin}
-            onChangeText={(t) => setNewPin(t.replace(/[^0-9]/g, "").slice(0, 6))}
-            keyboardType="number-pad"
-            secureTextEntry
-            placeholder="New 4-6 digit PIN"
-            placeholderTextColor={colors.muted}
-            testID="admin-pin-input"
-          />
-          <Pressable style={styles.wideBtn} onPress={savePin} testID="admin-save-pin">
-            <Text style={styles.wideBtnText}>Update PIN</Text>
-          </Pressable>
-        </View>
-
-        {/* Data / backup */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Data & backup</Text>
-          <Text style={styles.muted}>
-            All your data lives on this device. Export a backup file to keep it safe even if app data is cleared or
-            reinstalled, then import it anytime.
-          </Text>
-          <View style={styles.rowBtns}>
-            <Pressable style={[styles.smallBtn, { backgroundColor: colors.brandPrimary }]} onPress={onExport} testID="admin-export">
-              <Icon name="export-variant" size={18} color={colors.onBrand} />
-              <Text style={[styles.smallBtnText, { color: colors.onBrand }]}>Export</Text>
-            </Pressable>
-            <Pressable style={[styles.smallBtn, { backgroundColor: colors.surfaceTertiary }]} onPress={onImport} testID="admin-import">
-              <Icon name="import" size={18} color={colors.onSurface} />
-              <Text style={[styles.smallBtnText, { color: colors.onSurface }]}>Import</Text>
-            </Pressable>
-          </View>
-          <Pressable
-            style={styles.resetBtn}
-            onPress={() => { resetAll(); showToast("All data reset.", "success"); }}
-            testID="admin-reset"
-          >
-            <Icon name="delete-forever" size={18} color={colors.error} />
-            <Text style={styles.resetText}>Reset all data</Text>
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
