@@ -53,19 +53,19 @@ export function DrawerMenu({ visible, onClose }: Props) {
       <Animated.View
         entering={SlideInLeft.springify().damping(20)}
         exiting={SlideOutLeft}
-        style={[styles.panel, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}
+        style={[styles.panel, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
         testID="drawer-menu"
       >
         <View style={styles.topRow}>
           <Text style={styles.menuTitle}>Menu</Text>
           <Pressable onPress={onClose} hitSlop={10} testID="drawer-close-button">
-            <Icon name="close" size={26} color={colors.onSurface} />
+            <Icon name="close" size={22} color={colors.onSurface} />
           </Pressable>
         </View>
 
         <View style={styles.profile}>
           <View style={styles.avatar}>
-            <Icon name="account" size={30} color={colors.onBrand} />
+            <Icon name="account" size={24} color={colors.onBrand} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name} numberOfLines={1}>
@@ -80,20 +80,20 @@ export function DrawerMenu({ visible, onClose }: Props) {
         <View style={styles.divider} />
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }} style={{ flex: 1 }}>
-          <View style={{ gap: 4 }}>
+          <View style={{ gap: 2 }}>
             {items.map((it) => (
               <Pressable key={it.label} style={styles.row} onPress={it.onPress} testID={`drawer-${it.label.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
-                <Icon name={it.icon} size={22} color={colors.onSurfaceSecondary} />
+                <Icon name={it.icon} size={20} color={colors.onSurfaceSecondary} />
                 <Text style={styles.rowLabel}>{it.label}</Text>
-                <Icon name="chevron-right" size={22} color={colors.muted} />
+                <Icon name="chevron-right" size={20} color={colors.muted} />
               </Pressable>
             ))}
           </View>
 
           <Pressable style={styles.restricted} onPress={() => go("/restricted")} testID="drawer-restricted-area">
-            <Icon name="shield-lock" size={22} color={colors.brandPrimary} />
+            <Icon name="shield-lock" size={20} color={colors.brandPrimary} />
             <Text style={styles.restrictedLabel}>Restricted Area</Text>
-            <Icon name="chevron-right" size={22} color={colors.brandPrimary} />
+            <Icon name="chevron-right" size={20} color={colors.brandPrimary} />
           </Pressable>
         </ScrollView>
       </Animated.View>
@@ -109,33 +109,33 @@ const useStyles = makeStyles((colors) => ({
     top: 0,
     left: 0,
     bottom: 0,
-    width: "82%",
-    maxWidth: 360,
+    width: "80%",
+    maxWidth: 330,
     backgroundColor: colors.surfaceSecondary,
     borderRightWidth: 1,
     borderRightColor: colors.border,
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
   },
   topRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  menuTitle: { color: colors.onSurface, fontSize: 24, fontWeight: "800" },
-  profile: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 22 },
-  avatar: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
-  name: { color: colors.onSurface, fontSize: 22, fontWeight: "800" },
-  mobile: { color: colors.muted, fontSize: 14, marginTop: 2 },
-  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 18 },
-  row: { flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 15 },
-  rowLabel: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 17, fontWeight: "600" },
+  menuTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "800" },
+  profile: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 16 },
+  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  name: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
+  mobile: { color: colors.muted, fontSize: 13, marginTop: 2 },
+  divider: { height: 1, backgroundColor: colors.divider, marginVertical: 14 },
+  row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12 },
+  rowLabel: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "600" },
   restricted: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 16,
-    paddingVertical: 15,
-    paddingHorizontal: 14,
-    marginTop: 14,
-    borderRadius: 14,
+    gap: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.brandPrimary,
     backgroundColor: colors.brandSecondary,
   },
-  restrictedLabel: { flex: 1, color: colors.brandPrimary, fontSize: 17, fontWeight: "700" },
+  restrictedLabel: { flex: 1, color: colors.brandPrimary, fontSize: 15, fontWeight: "700" },
 }));

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, Pressable, TextInput } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -26,10 +27,13 @@ export default function Wallet() {
   const { colors } = useTheme();
   const { state, requestPayout } = useApp();
   const { showToast } = useToast();
+  const router = useRouter();
 
   const [selected, setSelected] = useState(100);
   const [upi, setUpi] = useState("");
   const [tab, setTab] = useState<"activity" | "payouts">("activity");
+
+  const recent = state.txns.slice(0, 10);
 
   const rupees = selected / 100;
   const canRequest = state.points >= selected && /^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi);
@@ -146,26 +150,34 @@ export default function Wallet() {
               <Text style={styles.emptyText}>No activity yet. Play a game to earn your first points!</Text>
             </View>
           ) : (
-            <View style={{ gap: 10 }}>
-              {state.txns.map((t) => (
-                <View key={t.id} style={styles.activityRow} testID={`wallet-activity-${t.id}`}>
-                  <View style={styles.activityIcon}>
-                    <Icon
-                      name={t.kind === "payout" ? "bank-transfer-out" : "star-four-points"}
-                      size={20}
-                      color={t.points >= 0 ? colors.success : colors.brandPrimary}
-                    />
+            <>
+              <View style={{ gap: 10 }}>
+                {recent.map((t) => (
+                  <View key={t.id} style={styles.activityRow} testID={`wallet-activity-${t.id}`}>
+                    <View style={styles.activityIcon}>
+                      <Icon
+                        name={t.kind === "payout" ? (t.points >= 0 ? "bank-transfer-in" : "bank-transfer-out") : "star-four-points"}
+                        size={20}
+                        color={t.points >= 0 ? colors.success : colors.brandPrimary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.activityTitle} numberOfLines={1}>{t.title}</Text>
+                      <Text style={styles.activityTime}>{formatRelative(t.ts)}</Text>
+                    </View>
+                    <Text style={[styles.activityAmt, { color: t.points >= 0 ? colors.success : colors.error }]}>
+                      {t.points >= 0 ? "+" : ""}{formatPoints(t.points)}
+                    </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.activityTitle} numberOfLines={1}>{t.title}</Text>
-                    <Text style={styles.activityTime}>{formatRelative(t.ts)}</Text>
-                  </View>
-                  <Text style={[styles.activityAmt, { color: t.points >= 0 ? colors.success : colors.error }]}>
-                    {t.points >= 0 ? "+" : ""}{formatPoints(t.points)}
-                  </Text>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+              {state.txns.length > 10 ? (
+                <Pressable style={styles.viewAll} onPress={() => router.push("/recent-activity")} testID="wallet-view-all-activity">
+                  <Text style={styles.viewAllText}>View all</Text>
+                  <Icon name="chevron-right" size={20} color={colors.brandPrimary} />
+                </Pressable>
+              ) : null}
+            </>
           )
         ) : state.payouts.length === 0 ? (
           <View style={styles.empty}>
@@ -259,6 +271,8 @@ const useStyles = makeStyles((colors) => ({
   activityTitle: { color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "700" },
   activityTime: { color: colors.muted, fontSize: 12, marginTop: 2 },
   activityAmt: { fontSize: 16, fontWeight: "800" },
+  viewAll: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 16, paddingVertical: 12 },
+  viewAllText: { color: colors.brandPrimary, fontSize: 16, fontWeight: "800" },
   empty: { alignItems: "center", gap: 12, paddingVertical: 24, paddingHorizontal: 30 },
   emptyText: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
   payoutCard: {

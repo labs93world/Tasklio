@@ -208,7 +208,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...s,
       points: s.points + points,
       cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
-      txns: [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns],
+      // don't record a history entry when nothing was earned
+      txns: points !== 0 ? [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
     }));
   };
 
@@ -286,9 +287,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...notifs,
         ];
       }
-      // refund points on rejection
-      const points = payout && status === "failed" ? s.points + Math.round(payout.amountRupees * POINTS_PER_RUPEE) : s.points;
-      return { ...s, payouts, notifs, points };
+      // refund points on rejection + record the refund in activity history (guard against double-refund)
+      const refund = payout && status === "failed" && payout.status !== "failed" ? Math.round(payout.amountRupees * POINTS_PER_RUPEE) : 0;
+      const txns =
+        refund > 0
+          ? [{ id: uid(), kind: "payout" as const, title: `Payout rejected · refund for ${payout!.upi}`, points: refund, ts: Date.now() }, ...s.txns]
+          : s.txns;
+      return { ...s, payouts, notifs, points: s.points + refund, txns };
     });
   };
 

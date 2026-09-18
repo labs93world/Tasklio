@@ -1,0 +1,36 @@
+{
+  "summary": "Tasklio iteration 3 (frontend-only, offline Expo web preview, viewport 390x844) — all 4 requested changes verified end-to-end plus regression. (1) Wallet: 'Recent activity'/'Payout history' tabs (wallet-tab-activity/wallet-tab-payouts) render and switch; activity list capped at exactly 10 rows (seeded 11 txns via admin credits); 'View all' (wallet-view-all-activity) appears ONLY when txns>10 (verified hidden with 1 and 3 txns, visible with 11) and navigates to /recent-activity showing all 11 rows. (2) No '+0' history: played Quiz Time answering all 5 questions wrong (deterministic via known BANK answers) → 0 pts awarded, txns count unchanged (11→11), zero-point txn count = 0, no '+0' text in wallet. (3) Rejected payout refund: requested ₹1 payout (100 pts, test@bank) → balance 0; admin set status failed via admin-status-{id}-failed → points refunded to 100, newest txn = 'Payout rejected · refund for test@bank' (+100, kind=payout) rendered at top of wallet Recent activity, plus 'Withdrawal rejected' notification created. (4) Home header compact: menu x=16 w=36, greeting 'Hii, Test User' fully visible (x=62, w=212), points badge x=274 h=32, bell right-aligned x=338 — no extra gaps; drawer compact with all 6 rows + Restricted Area card visible and close button working. Regression: create-account flow, 14-tile games grid, payout request flow all pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Wallet / Recent activity", "issues": ["Refund entries use kind='payout' so they render the 'bank-transfer-out' icon (an outflow glyph) even though the refund is money coming IN (+100). Cosmetic only — icon color is correctly green. Consider a distinct icon (e.g. bank-transfer-in / cash-refund) for refund txns.", "Long UPI in refund title is truncated with ellipsis ('refund for t...') due to numberOfLines={1} — acceptable, full text visible nowhere; consider showing full title on /recent-activity."]}
+    ],
+    "react_native_issues": [
+      {"component": "Global styles", "issue": "Pre-existing from iteration 2, still unresolved on code review: 'shadow*' style props deprecation warning — migrate to boxShadow API. Reference: multiple StyleSheet blocks across screens."},
+      {"component": "Splash Animated.View", "issue": "Pre-existing from iteration 2, still unresolved: props.pointerEvents deprecated — move into style.pointerEvents. Reference: /app/frontend/app/index.tsx."}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "(Optional, cosmetic) Use a money-in style icon for refund transactions in wallet/recent-activity rows.",
+    "(Carry-over from iter 2) Migrate shadow* style props to boxShadow; move pointerEvents into style on splash shimmer.",
+    "No functional fixes required — all 4 requested changes pass."
+  ],
+  "critical_code_review_comments": [
+    "app-store.tsx earnPoints (line 212): txns entry skipped when points === 0 — matches requirement; verified at runtime via 0-point quiz outcome.",
+    "app-store.tsx setPayoutStatus (lines 258-298): on 'failed' refunds Math.round(amountRupees * POINTS_PER_RUPEE) AND prepends a +refund txn titled 'Payout rejected · refund for {upi}' — verified end-to-end including balance restoration and notification.",
+    "wallet.tsx line 36: recent = state.txns.slice(0, 10) and line 174: view-all gated on state.txns.length > 10 — both verified UI-side (1, 3 and 11 txn cases).",
+    "Note: setPayoutStatus refunds even if the same payout is set to 'failed' twice (admin could double-refund by toggling failed→pending→failed). Edge case not in scope but worth a guard (skip refund if payout.status was already 'failed').",
+    "home.tsx header uses compact fixed-height icon slots (36x40) with greeting flex:1 marginLeft:10 — bbox measurements confirm tight, edge-aligned layout.",
+    "drawer-menu.tsx: compact 48px avatar, 12px row padding, 20px icons; all rows have correct testIDs and are tappable."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (no backend)", "frontend": "100% (all 6 feature/regression groups verified end-to-end with UI + state assertions)"},
+  "seed_data_creation": "Two throwaway accounts created in ephemeral browser contexts (Test User/9876543210 with 11 admin-credit txns; Refund Tester/9876543211 with a failed+refunded payout). No persistent seed data.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "localStorage 'tasklio_state_v3' value is DOUBLE-ENCODED JSON on web (JSON.parse twice). Fresh automation sessions do not preserve localStorage — clear + create account each session. Quiz deterministic-0 trick: BANK questions/answers are hardcoded in /app/frontend/app/games/quiz.tsx (lines 15-22); click option (answer+1)%4 five times via quiz-option-{0..3} for a guaranteed 0-point outcome. Payout id for admin status pills: read payouts[0].id from localStorage state, then admin-status-{id}-{pending|successful|failed}. /restricted → PIN 1234 → admin. Viewport 390x844.",
+  "rca_of_issue": "No bugs found this iteration. Prior '+0' history bug root cause (earnPoints unconditionally prepending a txn) is fixed via points !== 0 guard; prior missing refund-entry bug is fixed by prepending a +refund txn inside setPayoutStatus. Both fixes confirmed working at runtime."
+}

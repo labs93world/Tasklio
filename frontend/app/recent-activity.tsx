@@ -30,7 +30,7 @@ export default function RecentActivity() {
             <View key={t.id} style={styles.row} testID={`activity-${t.id}`}>
               <View style={styles.icon}>
                 <Icon
-                  name={t.kind === "payout" ? "bank-transfer-out" : t.kind === "adjust" ? "tune-variant" : "star-four-points"}
+                  name={t.kind === "payout" ? (t.points >= 0 ? "bank-transfer-in" : "bank-transfer-out") : t.kind === "adjust" ? "tune-variant" : "star-four-points"}
                   size={20}
                   color={t.points >= 0 ? colors.success : colors.brandPrimary}
                 />

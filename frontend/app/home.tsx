@@ -67,9 +67,9 @@ export default function Home() {
     <View style={styles.container} testID="home-screen">
       <StatusBar style="light" />
 
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
         <Pressable onPress={() => setDrawer(true)} hitSlop={10} style={styles.hMenu} testID="home-menu-button">
-          <Icon name="menu" size={28} color={colors.onSurface} />
+          <Icon name="menu" size={24} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.greeting} numberOfLines={1}>
           Hii, {state.profile.name || "Guest"}
@@ -77,10 +77,10 @@ export default function Home() {
         <View style={styles.hRight}>
           <Pressable onPress={() => router.push("/wallet")} style={styles.pointsBadge} testID="home-points-badge">
             <Text style={styles.pointsText}>{formatPoints(state.points)}</Text>
-            <Icon name="star" size={16} color={colors.brandPrimary} />
+            <Icon name="star" size={15} color={colors.brandPrimary} />
           </Pressable>
           <Pressable onPress={() => router.push("/notifications")} hitSlop={10} style={styles.bell} testID="home-bell-button">
-            <Icon name="bell-outline" size={26} color={colors.onSurface} />
+            <Icon name="bell-outline" size={24} color={colors.onSurface} />
             {unread > 0 ? <View style={styles.dot} /> : null}
           </Pressable>
         </View>
@@ -152,14 +152,14 @@ export default function Home() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, backgroundColor: colors.surface },
-  hMenu: { width: 40, height: 40, alignItems: "center", justifyContent: "center", borderRadius: 12 },
-  greeting: { flex: 1, marginLeft: 6, color: colors.onSurface, fontSize: 26, fontWeight: "800" },
-  hRight: { flexDirection: "row", alignItems: "center", gap: 12 },
-  pointsBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
-  pointsText: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
-  bell: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  dot: { position: "absolute", top: 8, right: 8, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error, borderWidth: 2, borderColor: colors.surface },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 10, backgroundColor: colors.surface },
+  hMenu: { width: 36, height: 40, alignItems: "flex-start", justifyContent: "center" },
+  greeting: { flex: 1, marginLeft: 10, color: colors.onSurface, fontSize: 22, fontWeight: "800" },
+  hRight: { flexDirection: "row", alignItems: "center", gap: 10 },
+  pointsBadge: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
+  pointsText: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },
+  bell: { width: 36, height: 40, alignItems: "flex-end", justifyContent: "center" },
+  dot: { position: "absolute", top: 9, right: 2, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.error, borderWidth: 2, borderColor: colors.surface },
   banner: { flexDirection: "row", alignItems: "center", gap: 16, backgroundColor: colors.surfaceSecondary, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.border, marginHorizontal: 16 },
   bannerIcon: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   bannerTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },

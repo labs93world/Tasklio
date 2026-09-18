@@ -101,3 +101,64 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+## user_problem_statement: Tasklio offline rewards + mini-games app. Latest fixes: (1) no "+0" history entries when user earns nothing; (2) rejected withdrawal creates a refund entry in Recent activity; (3) Wallet Recent activity capped at 10 items with a "View all" button to /recent-activity; (4) home header + drawer menu layout compacted (smaller sizes, no extra gaps).
+##
+## frontend:
+##   - task: "No +0 history entries on zero-point earnings"
+##     implemented: true
+##     working: "NA"
+##     file: "frontend/src/store/app-store.tsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##         -working: "NA"
+##         -agent: "main"
+##         -comment: "earnPoints skips txn creation when points === 0"
+##   - task: "Rejected payout creates refund history entry"
+##     implemented: true
+##     working: "NA"
+##     file: "frontend/src/store/app-store.tsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##         -working: "NA"
+##         -agent: "main"
+##         -comment: "setPayoutStatus(failed) adds kind=payout txn with +refund points"
+##   - task: "Wallet recent activity capped at 10 + View all button"
+##     implemented: true
+##     working: "NA"
+##     file: "frontend/app/wallet.tsx"
+##     stuck_count: 0
+##     priority: "high"
+##     needs_retesting: true
+##     status_history:
+##         -working: "NA"
+##         -agent: "main"
+##         -comment: "Recent activity tab shows max 10 entries, View all navigates to /recent-activity"
+##   - task: "Compact home header and drawer menu layout"
+##     implemented: true
+##     working: "NA"
+##     file: "frontend/app/home.tsx, frontend/src/components/drawer-menu.tsx"
+##     stuck_count: 0
+##     priority: "medium"
+##     needs_retesting: true
+##     status_history:
+##         -working: "NA"
+##         -agent: "main"
+##         -comment: "Reduced sizes/gaps in home header and drawer; header icons hug edges with explicit spacing"
+##
+## test_plan:
+##   current_focus:
+##     - "No +0 history entries on zero-point earnings"
+##     - "Rejected payout creates refund history entry"
+##     - "Wallet recent activity capped at 10 + View all button"
+##     - "Compact home header and drawer menu layout"
+##   test_all: false
+##   test_priority: "high_first"
+##
+## agent_communication:
+##     -agent: "main"
+##     -message: "Verify: wallet Recent activity tab (10 cap + View all), +0 earn creates no history, admin rejecting a payout (PIN 1234 via /restricted) creates a +refund history entry, and header/drawer look compact with proper spacing."

@@ -41,3 +41,8 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Imported GitHub project `labs93world/Tasklio` into this workspace (git remote connected, full history present).
 - Verified all services running (expo, backend, mongodb) and confirmed the app renders correctly on web preview (splash + mandatory auth modal visible).
 - Moved Recent activity section off Home; Wallet now has selectable "Recent activity" / "Payout history" category tabs (defaults to Recent activity). Verified via screenshots.
+- Wallet Recent activity capped at 10 entries + restored "View all" button → `/recent-activity` (button shows only when >10 txns).
+- Zero-point game outcomes no longer create "+0" history entries.
+- Rejected payouts now add a refund entry to Recent activity (+refund, bank-transfer-in icon) alongside the points refund; guarded against double-refund on status toggling.
+- Compacted home header (smaller icons/text, edge-hugging menu + bell, explicit spacing) and drawer menu (smaller avatar, tighter rows).
+- Testing iteration 3: all pass.
