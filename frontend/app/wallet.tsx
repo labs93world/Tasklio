@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { useApp, PayoutStatus } from "@/src/store/app-store";
 import { useToast } from "@/src/components/toast";
-import { formatPoints, pointsToRupees, formatRupees, formatDateShort } from "@/src/utils/format";
+import { formatPoints, pointsToRupees, formatRupees, formatDateShort, formatRelative } from "@/src/utils/format";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const CHIPS = [100, 500, 1000];
@@ -29,6 +29,7 @@ export default function Wallet() {
 
   const [selected, setSelected] = useState(100);
   const [upi, setUpi] = useState("");
+  const [tab, setTab] = useState<"activity" | "payouts">("activity");
 
   const rupees = selected / 100;
   const canRequest = state.points >= selected && /^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi);
@@ -120,9 +121,53 @@ export default function Wallet() {
           </Text>
         ) : null}
 
-        {/* History */}
-        <Text style={styles.historyTitle}>Payout history</Text>
-        {state.payouts.length === 0 ? (
+        {/* History — selectable category: recent activity or payout history */}
+        <View style={styles.segWrap} testID="wallet-history-tabs">
+          <Pressable
+            style={[styles.segBtn, tab === "activity" && styles.segBtnActive]}
+            onPress={() => setTab("activity")}
+            testID="wallet-tab-activity"
+          >
+            <Text style={[styles.segText, tab === "activity" && styles.segTextActive]}>Recent activity</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.segBtn, tab === "payouts" && styles.segBtnActive]}
+            onPress={() => setTab("payouts")}
+            testID="wallet-tab-payouts"
+          >
+            <Text style={[styles.segText, tab === "payouts" && styles.segTextActive]}>Payout history</Text>
+          </Pressable>
+        </View>
+
+        {tab === "activity" ? (
+          state.txns.length === 0 ? (
+            <View style={styles.empty}>
+              <Icon name="history" size={30} color={colors.muted} />
+              <Text style={styles.emptyText}>No activity yet. Play a game to earn your first points!</Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10 }}>
+              {state.txns.map((t) => (
+                <View key={t.id} style={styles.activityRow} testID={`wallet-activity-${t.id}`}>
+                  <View style={styles.activityIcon}>
+                    <Icon
+                      name={t.kind === "payout" ? "bank-transfer-out" : "star-four-points"}
+                      size={20}
+                      color={t.points >= 0 ? colors.success : colors.brandPrimary}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activityTitle} numberOfLines={1}>{t.title}</Text>
+                    <Text style={styles.activityTime}>{formatRelative(t.ts)}</Text>
+                  </View>
+                  <Text style={[styles.activityAmt, { color: t.points >= 0 ? colors.success : colors.error }]}>
+                    {t.points >= 0 ? "+" : ""}{formatPoints(t.points)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )
+        ) : state.payouts.length === 0 ? (
           <View style={styles.empty}>
             <Icon name="bank-transfer" size={30} color={colors.muted} />
             <Text style={styles.emptyText}>No payouts yet. Redeem your points to see them here.</Text>
@@ -204,7 +249,16 @@ const useStyles = makeStyles((colors) => ({
   payBtnText: { color: colors.onBrand, fontSize: 17, fontWeight: "800" },
   payBtnTextDisabled: { color: colors.muted },
   hint: { color: colors.muted, fontSize: 13, textAlign: "center", marginTop: 10 },
-  historyTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800", marginTop: 30, marginBottom: 16 },
+  segWrap: { flexDirection: "row", gap: 8, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 6, marginTop: 30, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
+  segBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  segBtnActive: { backgroundColor: colors.brandSecondary },
+  segText: { color: colors.muted, fontSize: 14, fontWeight: "800" },
+  segTextActive: { color: colors.brandPrimary },
+  activityRow: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border },
+  activityIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
+  activityTitle: { color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "700" },
+  activityTime: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  activityAmt: { fontSize: 16, fontWeight: "800" },
   empty: { alignItems: "center", gap: 12, paddingVertical: 24, paddingHorizontal: 30 },
   emptyText: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
   payoutCard: {

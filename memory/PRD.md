@@ -11,8 +11,8 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 
 ## Screens
 - `/` splash → `/home`
-- `/home` — greeting, points badge, notifications bell, auto+manual centered banner carousel, DOUBLE-ROW games grid (14 games), recent activity + "View all"; MANDATORY AuthModal on first launch (Create/Login, Forgot→Help&Support)
-- `/wallet` — balance, chips, UPI input, payout request, VERTICAL payout history
+- `/home` — greeting, points badge, notifications bell, auto+manual centered banner carousel, DOUBLE-ROW games grid (14 games); MANDATORY AuthModal on first launch (Create/Login, Forgot→Help&Support)
+- `/wallet` — balance, chips, UPI input, payout request, selectable category tabs (Recent activity / Payout history, defaults to Recent activity) with vertical history lists
 - `/notifications` — Read All, unread until tapped, pinned custom on top; only Withdrawal success/reject, 5am daily reminder, admin custom
 - `/recent-activity` — full transaction history
 - `/restricted` (PIN 1234) → `/admin` (adjust points, payout status, profile name+mobile, PIN, custom notification, backup/import/reset)
@@ -40,3 +40,4 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 ## Session Log (2026-09-18)
 - Imported GitHub project `labs93world/Tasklio` into this workspace (git remote connected, full history present).
 - Verified all services running (expo, backend, mongodb) and confirmed the app renders correctly on web preview (splash + mandatory auth modal visible).
+- Moved Recent activity section off Home; Wallet now has selectable "Recent activity" / "Payout history" category tabs (defaults to Recent activity). Verified via screenshots.

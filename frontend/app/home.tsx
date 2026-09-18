@@ -18,7 +18,7 @@ import { DrawerMenu } from "@/src/components/drawer-menu";
 import { AuthModal } from "@/src/components/auth-modal";
 import { useApp } from "@/src/store/app-store";
 import { GAMES } from "@/src/constants/games";
-import { formatPoints, formatRelative } from "@/src/utils/format";
+import { formatPoints } from "@/src/utils/format";
 import { makeStyles, useTheme, ThemeColors } from "@/src/theme";
 
 const { width } = Dimensions.get("window");
@@ -45,7 +45,6 @@ export default function Home() {
   const pageRef = useRef(0);
 
   const unread = state.notifs.filter((n) => !n.read).length;
-  const recent = state.txns.slice(0, 4);
 
   // Auto-advance banner
   useEffect(() => {
@@ -143,37 +142,6 @@ export default function Home() {
           ))}
         </ScrollView>
 
-        {/* Recent activity */}
-        <Text style={styles.sectionTitle}>Recent activity</Text>
-        {recent.length === 0 ? (
-          <View style={styles.empty}>
-            <Icon name="history" size={30} color={colors.muted} />
-            <Text style={styles.emptyText}>No activity yet. Play a game to earn your first points!</Text>
-          </View>
-        ) : (
-          <>
-            <View style={styles.activityList}>
-              {recent.map((t) => (
-                <View key={t.id} style={styles.activityRow}>
-                  <View style={styles.activityIcon}>
-                    <Icon name={t.kind === "payout" ? "bank-transfer-out" : "star-four-points"} size={20} color={t.points >= 0 ? colors.success : colors.brandPrimary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.activityTitle} numberOfLines={1}>{t.title}</Text>
-                    <Text style={styles.activityTime}>{formatRelative(t.ts)}</Text>
-                  </View>
-                  <Text style={[styles.activityAmt, { color: t.points >= 0 ? colors.success : colors.error }]}>
-                    {t.points >= 0 ? "+" : ""}{formatPoints(t.points)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-            <Pressable style={styles.viewAll} onPress={() => router.push("/recent-activity")} testID="home-view-all">
-              <Text style={styles.viewAllText}>View all</Text>
-              <Icon name="chevron-right" size={20} color={colors.brandPrimary} />
-            </Pressable>
-          </>
-        )}
       </ScrollView>
 
       <DrawerMenu visible={drawer} onClose={() => setDrawer(false)} />
@@ -204,15 +172,4 @@ const useStyles = makeStyles((colors) => ({
   gameTile: { alignItems: "center", width: 82 },
   gameIcon: { width: 72, height: 72, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   gameLabel: { color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: "700", textAlign: "center" },
-  sectionTitle: { color: colors.onSurface, fontSize: 19, fontWeight: "800", marginTop: 28, marginBottom: 14, paddingHorizontal: 16 },
-  empty: { alignItems: "center", gap: 12, paddingHorizontal: 40, paddingVertical: 24 },
-  emptyText: { color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 },
-  activityList: { paddingHorizontal: 16, gap: 10 },
-  activityRow: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border },
-  activityIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
-  activityTitle: { color: colors.onSurfaceSecondary, fontSize: 15, fontWeight: "700" },
-  activityTime: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  activityAmt: { fontSize: 16, fontWeight: "800" },
-  viewAll: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, marginTop: 16, paddingVertical: 12 },
-  viewAllText: { color: colors.brandPrimary, fontSize: 16, fontWeight: "800" },
 }));
