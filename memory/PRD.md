@@ -77,3 +77,10 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
   - Settings: Maintenance (global + per-screen toggles) / Force Update (toggle + version + message) / Slide Menu (editable name/icon/url + add/del).
 - Installed expo-clipboard for copy buttons.
 - Testing iteration 6: 15/15 pass.
+
+## Session Log (2026-09-19, iteration 7)
+- User requested the app be 100% offline (nothing needs internet). Verified the frontend makes ZERO network calls (no fetch/axios, no remote images/fonts) — it was already fully offline via AsyncStorage + FileSystem.
+- Per user choice, removed the unused FastAPI/MongoDB backend entirely: stopped the `backend` supervisor service and deleted `/app/backend` code (server.py, requirements.txt, pytest.ini, .env). The app never called it.
+- Kept the drawer menu and ALL its links unchanged (Share / Rate us / Join Community / Help & Support) per user instruction "keep menu".
+- App is now pure offline frontend: login, wallet, 9 games, daily check-in, payouts, notifications, admin, backup/restore all run on-device. Verified home + auth render with backend down.
+- Note: the read-only supervisord.conf still defines the backend program (cannot edit it), so on a full container restart it may try to start and fail harmlessly — the frontend is unaffected.
