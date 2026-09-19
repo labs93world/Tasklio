@@ -84,3 +84,18 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Kept the drawer menu and ALL its links unchanged (Share / Rate us / Join Community / Help & Support) per user instruction "keep menu".
 - App is now pure offline frontend: login, wallet, 9 games, daily check-in, payouts, notifications, admin, backup/restore all run on-device. Verified home + auth render with backend down.
 - Note: the read-only supervisord.conf still defines the backend program (cannot edit it), so on a full container restart it may try to start and fail harmlessly — the frontend is unaffected.
+
+## Session Log (2026-09-19, iteration 8) — Deployment readiness health check
+- Ran deployment_agent health check. Initial run flagged: missing backend (by design), yarn/package-lock mismatch, .gitignore .env exclusion.
+- FIX: generated & committed `frontend/yarn.lock` (packageManager=yarn@1.22.22). Re-check: `expo_release_build_ok: true`, `stack_supported: true`, `dockerignore_blocks_required_files: false`, all env/asset/permission checks pass. Lint clean. App still renders.
+- REMAINING BLOCKER (by design): Emergent deploy pipeline boots `uvicorn server:app` from /app/backend, but backend was removed per user choice → deploy expects a backend process.
+- WARNs (not blockers): hardcoded ACCESS_KEY in drawer-menu.tsx ships in bundle (by design, restricted-area gate); no user-facing account-deletion flow (Apple App Store review concern).
+
+## Session Log (2026-09-19, iteration 9) — Made deployment-ready
+- User: "Make it ready for successful deployment (do whatever needed)."
+- FIX 1 (lockfile): committed frontend/yarn.lock via `yarn install` → resolves release-build package-manager mismatch.
+- FIX 2 (backend): restored a MINIMAL FastAPI backend at /app/backend so Emergent's Publish pipeline has a healthy process to boot behind EXPO_PUBLIC_BACKEND_URL. server.py exports `app` with GET /api/ and GET /api/health, CORS, MONGO_URL/DB_NAME from .env, Motor client. requirements.txt trimmed to fastapi/uvicorn/motor/pymongo/pydantic/python-dotenv/python-multipart. .env restored (MONGO_URL, DB_NAME=tasklio_database). Backend RUNNING; /api/ returns {"status":"ok","mode":"offline"}. The offline app never calls it — it's purely a deploy target.
+- FIX 3 (.gitignore): removed `.env`, `.env.*`, `*.env` ignore rules so deployment-required env files aren't excluded from the deploy context (kept credentials.json/*.key/.credentials ignored).
+- deployment_agent final re-check: status WARN, note "No build-blocking Expo/FastAPI/Mongo deployment issues were confirmed." checks: compilation_passed=true, expo_release_build_ok=true, expo_backend_reachable=true, dockerignore_blocks_required_files=false, stack_supported=true, db_name_from_env=true. Lint clean.
+- Remaining findings are WARN/INFO only (NOT deploy blockers), inherent to the offline-admin design: client-bundled ACCESS_KEY (drawer-menu), default adminPin "1234" (app-store), mock demo passwords in admin-mock.ts, push-notification UI is in-app only (no FCM), and no self-service delete-account flow (Apple review advisory). Left intact to preserve the user's offline admin feature; flagged for the user.
+- App is DEPLOYMENT-READY for Emergent Publish.
