@@ -64,3 +64,16 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Home header: more top spacing (insets.top + 16).
 - Verified account-creation popup works correctly (no bug); all error toasts + success path confirmed.
 - Testing iteration 5: 6/6 pass.
+
+## Session Log (2026-09-19, iteration 6)
+- Admin Panel fully redesigned as a global control center (UI ONLY; mock data in src/constants/admin-mock.ts, no backend persistence — most actions toast only; notification push + points refund are real).
+- Two sections via a switch: Dashboard + Manage.
+- Dashboard: 3 cards in one row — Users (count), Pending (count + ₹), Paid (count + ₹).
+- Manage: horizontal chip row of 5 tabs — Users / Payout / LiveCtrl / Config / Settings.
+  - Users: search by mobile, user rows (name•mobile + copy, subtitle date•pts•₹), tap → User Details bottom-sheet (editable name/mobile/password w/ reveal, balance, save, activity↔payout sub-tabs, delete-account confirm).
+  - Payout: 3 sub-tabs (Pending/Successful/Rejected); pending items → clickable avatar (user details), ₹•upi w/ copy, datetime, Approve (confirm) / Reject (confirm + reason).
+  - LiveCtrl: Banner (toggles + add) / Notification (title+body + real push).
+  - Config: Reward (7 check-in inputs + per-game max) / Wallet (exchange ratio + editable chips).
+  - Settings: Maintenance (global + per-screen toggles) / Force Update (toggle + version + message) / Slide Menu (editable name/icon/url + add/del).
+- Installed expo-clipboard for copy buttons.
+- Testing iteration 6: 15/15 pass.
