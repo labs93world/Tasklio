@@ -115,3 +115,9 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - New shared: `src/components/auto-text.tsx` (adjustsFontSizeToFit wrapper).
 - testing_agent iteration: all 15 acceptance points PASS (incl. keyboard fix). Fixed 2 flagged nits: confirm-field empty errors in create mode; try/finally around GetChances ad.
 - NOTE: rewarded-ad features require a native APK/IPA build to show real ads (Expo Go/web simulate them).
+
+## Session Log (2026-09-20, iteration 11) — GitHub import into fresh workspace
+- User re-imported `https://github.com/labs93world/Tasklio` into a new Emergent workspace. Verified workspace files match the GitHub repo exactly (only env/cache differences: .env files, .expo, yarn.lock).
+- All services RUNNING (expo, backend, mongodb). Backend health: GET /api/ → {"status":"ok","app":"Tasklio","mode":"offline"}.
+- Web preview verified: app renders (splash screen with glow-ring animation confirmed via screenshot); Metro bundling clean.
+- No code changes needed — import only.
