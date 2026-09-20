@@ -7,6 +7,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/src/components/error-boundary";
+import { OfflineGate } from "@/src/components/offline-gate";
 import { ToastProvider } from "@/src/components/toast";
 import { AppProvider } from "@/src/store/app-store";
 import { queryClient } from "@/src/query-client";
@@ -33,6 +34,7 @@ export default function RootLayout() {
               <AppProvider>
                 <ToastProvider>
                   <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0B0B0E" } }} />
+                  <OfflineGate />
                 </ToastProvider>
               </AppProvider>
             </KeyboardProvider>

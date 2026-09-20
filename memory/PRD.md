@@ -121,3 +121,9 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - All services RUNNING (expo, backend, mongodb). Backend health: GET /api/ → {"status":"ok","app":"Tasklio","mode":"offline"}.
 - Web preview verified: app renders (splash screen with glow-ring animation confirmed via screenshot); Metro bundling clean.
 - No code changes needed — import only.
+
+## Session Log (2026-09-20, iteration 12) — Internet-required gate
+- User: app is offline by design, but must NOT be usable without an internet connection.
+- Installed `@react-native-community/netinfo` (12.0.1) via yarn expo install.
+- New `src/components/offline-gate.tsx`: full-screen blocking Modal (wifi-off icon, "No internet connection", Try again → NetInfo.refresh()) mounted above the Stack in `_layout.tsx`. Blocks when `isConnected === false` OR `isInternetReachable === false`; unknown (null) state never blocks (no launch flash).
+- Verified on web preview: cutting browser network shows the gate over the app; restoring network dismisses it and the app returns (auth modal visible). Icon-font placeholder on the gate is a web-only artifact of the browser being offline (fonts are bundled on device).
