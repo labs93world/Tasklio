@@ -127,3 +127,14 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Installed `@react-native-community/netinfo` (12.0.1) via yarn expo install.
 - New `src/components/offline-gate.tsx`: full-screen blocking Modal (wifi-off icon, "No internet connection", Try again → NetInfo.refresh()) mounted above the Stack in `_layout.tsx`. Blocks when `isConnected === false` OR `isInternetReachable === false`; unknown (null) state never blocks (no launch flash).
 - Verified on web preview: cutting browser network shows the gate over the app; restoring network dismisses it and the app returns (auth modal visible). Icon-font placeholder on the gate is a web-only artifact of the browser being offline (fonts are bundled on device).
+
+## Session Log (2026-09-20, iteration 13) — Deployment build failure fixed
+- User reported Emergent deploy failing at the eas-apk-build step: "No lockfile found in the project directory. A lockfile is required to ensure deterministic dependency installation in EAS."
+- Root cause: frontend shipped `package-lock.json` (npm) but no `yarn.lock`, while package.json pins `packageManager: yarn@1.22.22`. EAS requires a matching committed lockfile.
+- FIX 1: generated `frontend/yarn.lock` via `yarn install` and deleted `frontend/package-lock.json` (single package manager, no mixed-lockfile warning).
+- FIX 2 (deployment_agent blocker): added root-level `GET /health` in backend/server.py — platform probes hit `/health` without the `/api` prefix and were getting 404.
+- FIX 3 (deployment_agent warn): removed `.env`, `.env.*`, `*.env` rules from root .gitignore so env files ship in the deploy context.
+- FIX 4 (store-review warn): privacy policy + support FAQ updated — they still claimed "works fully offline / no internet required", now inaccurate after the internet gate; added an Ads (Google AdMob) disclosure section.
+- Left intentionally (need user input, not build blockers): Google TEST AdMob app IDs in app.json (user must supply production AdMob IDs before store submission); client-side ACCESS_KEY gate in drawer-menu.tsx (offline admin design).
+- deployment_agent re-check: status WARN (was FAIL) — expo_release_build_ok=true, expo_backend_reachable=true, dockerignore_blocks_required_files=false, compilation_passed=true.
+- testing_agent smoke (iteration_8): ALL PASS — backend 7/7 pytest (/api/, /api/health, root /health), frontend loads to /home auth modal, OfflineGate intact. Note: Playwright set_offline doesn't trigger netinfo v12 web (subscribes to navigator.connection 'change') — tooling quirk, native unaffected.

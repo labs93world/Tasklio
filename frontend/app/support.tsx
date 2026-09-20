@@ -10,7 +10,7 @@ const FAQ = [
   { q: "How do I earn points?", a: "Play any game on the home screen — Spin & Win, Quiz Time, Tap Race and more. Every game adds points to your wallet." },
   { q: "How much are my points worth?", a: "100 points equal ₹1. Your wallet shows the estimated cash value at all times." },
   { q: "How do payouts work?", a: "Open your wallet, pick an amount, enter your UPI ID and request a payout. Track its status right inside the wallet." },
-  { q: "Does the app need internet?", a: "No. Tasklio stores everything on your device and works fully offline." },
+  { q: "Does the app need internet?", a: "Yes. Tasklio needs an internet connection to open, but your points, wallet and activity stay stored on your device." },
 ];
 
 export default function Support() {

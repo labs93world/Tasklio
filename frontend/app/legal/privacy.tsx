@@ -11,8 +11,12 @@ const SECTIONS = [
     p: "Tasklio stores your points, activity, notifications, payout history and profile entirely on your own device. We do not run servers that collect this data.",
   },
   {
-    h: "No internet required",
-    p: "The app works fully offline. Nothing about your gameplay or wallet is uploaded automatically.",
+    h: "Internet connection",
+    p: "Tasklio needs an active internet connection to open and use the app. Your gameplay, wallet and activity data still stay stored on your own device.",
+  },
+  {
+    h: "Ads",
+    p: "We show rewarded ads (Google AdMob) when you choose to claim certain rewards or extra chances. Google may process device and ad-interaction data as described in Google's own privacy policy.",
   },
   {
     h: "Backups",

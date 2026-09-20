@@ -1,0 +1,32 @@
+{
+  "summary": "Regression smoke test after deployment fixes (yarn.lock swap, root /health endpoint, .gitignore .env un-ignore). ALL PASS. Backend: 7/7 pytest cases green via public URL (https://github-import-147.preview.emergentagent.com) — GET /api/ returns {status:ok, app:Tasklio, mode:offline}, GET /api/health returns status:healthy with valid ISO timestamp, GET /health root-level probe returns healthy when hitting the backend directly (localhost:8001). Frontend: web preview loads fast (~5s), redirects to /home, auth modal (Create Account) renders with auth-name/auth-mobile/auth-confirm-mobile/auth-password/auth-confirm-password inputs and auth-submit button — no console errors, no blank screen, no red screen. OfflineGate verified intact: hidden while online; when netinfo reports offline the gate shows 'No internet connection' + retry button (offline-gate-retry-button) and disappears again when connectivity returns. Lockfile fix confirmed on disk: frontend/yarn.lock present (316KB), package-lock.json deleted, root .gitignore has no .env ignore rules. No regressions from the deploy fixes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /health (public URL)", "issue": "Preview ingress routes non-/api paths to the frontend (port 3000), so https://.../health returns the HTML app shell, not the backend JSON. The root-level /health probe IS live on the backend process itself (verified via localhost:8001). If the Emergent deploy probe checks the public URL without /api prefix it will get HTML with HTTP 200 — likely still passes a status-code check, but worth confirming the probe target."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_8.json", "/app/backend/tests/test_health_smoke.py", "/app/test_reports/pytest/pytest_results.xml", "/app/test_reports/offline_gate.png"],
+  "action_items": [
+    "OPTIONAL: Confirm what URL the Emergent deploy platform health-probes. If it hits the public URL without /api prefix, it receives the frontend HTML (200 OK) rather than the backend JSON — the root-level /health endpoint only answers when the probe reaches the backend process directly.",
+    "OPTIONAL: server.py uses deprecated @app.on_event('shutdown') — consider lifespan handler; harmless today."
+  ],
+  "critical_code_review_comments": [
+    "OfflineGate web behavior RCA: @react-native-community/netinfo v12 web impl subscribes to navigator.connection 'change' when the Network Information API exists (Chromium) and ONLY falls back to window online/offline events otherwise. Playwright's CDP set_offline fires window events but not the connection change event, so standard offline emulation never triggers the gate — this is a test-tooling limitation, NOT an app bug. Dispatching the connection 'change' event manually proved the gate works end-to-end (shows offline UI, retry button, hides on reconnect).",
+    "No deprecated Expo packages in package.json (no expo-av / expo-barcode-scanner / expo-background-fetch).",
+    "Deploy fix artifacts verified on disk: yarn.lock present, package-lock.json absent, packageManager=yarn@1.22.22, root .gitignore clean of .env rules."
+  ],
+  "updated_files": ["/app/backend/tests/test_health_smoke.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "seed_data_creation": "None — offline app, fresh browser context shows create-account modal as expected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public URL: https://github-import-147.preview.emergentagent.com. Backend regression suite at /app/backend/tests/test_health_smoke.py (run with EXPO_PUBLIC_BACKEND_URL set). To test OfflineGate on web preview: page.context.set_offline(True) ALONE is insufficient in Chromium — netinfo listens on navigator.connection 'change'; after set_offline, dispatch it manually: navigator.connection.dispatchEvent(new Event('change')). Gate testIDs: offline-gate, offline-gate-retry-button. Auth modal testIDs: auth-modal, auth-name, auth-mobile, auth-confirm-mobile, auth-password, auth-confirm-password, auth-submit, auth-tab-create/login.",
+  "rca_of_issue": "No regressions found. One investigation note: initial offline-gate simulation appeared to fail, RCA'd to Playwright CDP offline emulation not firing the NetworkInformation 'change' event that netinfo v12's web implementation subscribes to in Chromium (navigator.connection exists → window online/offline listeners are never registered). Firing the event manually confirmed the gate logic, modal UI, retry button, and recovery path all work correctly. Native (EAS build) uses the netinfo native module, unaffected by this web-only tooling quirk."
+}

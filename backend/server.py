@@ -42,6 +42,13 @@ async def health():
 
 app.include_router(api_router)
 
+
+# Root-level health probe: the deploy platform checks GET /health without the
+# /api prefix, so expose the same handler there too.
+@app.get("/health")
+async def root_health():
+    return {"status": "healthy", "time": datetime.now(timezone.utc).isoformat()}
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
