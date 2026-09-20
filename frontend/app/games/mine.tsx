@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const PER = 20;
@@ -18,38 +19,40 @@ export default function Mine() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("mine", "Mine Pick");
 
   const [bomb, setBomb] = useState(newBomb);
   const [picked, setPicked] = useState<number[]>([]);
   const [dead, setDead] = useState(false);
-  const [result, setResult] = useState<{ points: number; title: string; sub: string } | null>(null);
+  const [started, setStarted] = useState(false);
 
   const banked = picked.filter((i) => i !== bomb).length * PER;
 
   const pick = (i: number) => {
-    if (dead || result || picked.includes(i)) return;
+    if (dead || S.result || picked.includes(i)) return;
+    if (!started) {
+      if (!S.startRound()) return;
+      setStarted(true);
+    }
     const next = [...picked, i];
     setPicked(next);
     if (i === bomb) {
       setDead(true);
-      earnPoints({ gameId: "mine", points: 0, title: "Mine Pick" });
-      setTimeout(() => setResult({ points: 0, title: "Boom!", sub: "You hit the bomb and lost this round" }), 400);
+      setTimeout(() => S.finishRound(0, "Boom!", "You hit the bomb and lost this round"), 400);
     }
   };
 
   const cashOut = () => {
-    if (dead || result || banked === 0) return;
-    earnPoints({ gameId: "mine", points: banked, title: "Mine Pick" });
-    setResult({ points: banked, title: "Cashed out!", sub: `You banked ${picked.length} safe tiles` });
+    if (dead || S.result || banked === 0) return;
+    S.finishRound(banked, "Cashed out!", `You banked ${picked.length} safe tiles`);
   };
 
-  const reset = () => { setBomb(newBomb()); setPicked([]); setDead(false); setResult(null); };
+  const reset = () => { setBomb(newBomb()); setPicked([]); setDead(false); setStarted(false); };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Mine Pick" />
+      <ScreenHeader title="Mine Pick" right={<ChancesBadge gameId="mine" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={styles.blurb}>Each safe tile is {PER} points. Avoid the bomb and cash out anytime!</Text>
         <Text style={styles.banked}>Banked: {banked} pts</Text>
@@ -75,7 +78,14 @@ export default function Mine() {
         </Pressable>
       </View>
 
-      <GameResult visible={!!result} title={result?.title ?? ""} subtitle={result?.sub ?? ""} points={result?.points ?? 0} onPlayAgain={reset} />
+      <GameResult
+        visible={!!S.result}
+        title={S.result?.title ?? ""}
+        subtitle={S.result?.subtitle ?? ""}
+        points={S.result?.points ?? 0}
+        onClaim={() => { S.claim(); reset(); }}
+      />
+      <GetChancesModal visible={S.getModal} gameId="mine" onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

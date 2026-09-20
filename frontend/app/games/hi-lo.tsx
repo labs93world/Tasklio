@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const rand = () => Math.floor(Math.random() * 13) + 1; // 1..13
@@ -16,32 +17,32 @@ export default function HiLo() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("hilo", "Hi-Lo");
 
   const [current, setCurrent] = useState(rand);
   const [streak, setStreak] = useState(0);
-  const [result, setResult] = useState<{ points: number } | null>(null);
+  const [started, setStarted] = useState(false);
 
   const guess = (higher: boolean) => {
-    if (result) return;
+    if (S.result) return;
+    if (!started) { if (!S.startRound()) return; setStarted(true); }
     const next = rand();
     const correct = next === current ? true : higher ? next > current : next < current;
     if (correct) {
       setCurrent(next);
       setStreak((s) => s + 1);
     } else {
-      const points = streak * PER;
-      earnPoints({ gameId: "hilo", points, title: "Hi-Lo" });
-      setResult({ points });
+      setStarted(false);
+      S.finishRound(streak * PER, streak > 0 ? "Nice run!" : "Try again", `Streak of ${streak}`);
     }
   };
 
-  const reset = () => { setCurrent(rand()); setStreak(0); setResult(null); };
+  const reset = () => { setCurrent(rand()); setStreak(0); setStarted(false); };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Hi-Lo" />
+      <ScreenHeader title="Hi-Lo" right={<ChancesBadge gameId="hilo" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={styles.blurb}>Will the next card be higher or lower? Each correct guess is {PER} points.</Text>
         <Text style={styles.streak}>Streak: {streak} · {streak * PER} pts</Text>
@@ -62,7 +63,8 @@ export default function HiLo() {
         </View>
       </View>
 
-      <GameResult visible={!!result} title={streak > 0 ? "Nice run!" : "Try again"} subtitle={`Streak of ${streak}`} points={result?.points ?? 0} onPlayAgain={reset} />
+      <GameResult visible={!!S.result} title={S.result?.title ?? ""} subtitle={S.result?.subtitle ?? ""} points={S.result?.points ?? 0} onClaim={() => { S.claim(); reset(); }} />
+      <GetChancesModal visible={S.getModal} gameId="hilo" onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, Pressable, TextInput, Modal } from "react-native";
+import { View, Text, Pressable, TextInput, Modal, ActivityIndicator } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -8,8 +8,10 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
+import { AutoText } from "@/src/components/auto-text";
 import { useApp, PayoutStatus } from "@/src/store/app-store";
 import { useToast } from "@/src/components/toast";
+import { showRewardedAd } from "@/src/ads";
 import { formatPoints, pointsToRupees, formatRupees, formatDateShort, formatRelative } from "@/src/utils/format";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -33,6 +35,7 @@ export default function Wallet() {
   const [upi, setUpi] = useState("");
   const [tab, setTab] = useState<"activity" | "payouts">("activity");
   const [thanks, setThanks] = useState(false);
+  const [adLoading, setAdLoading] = useState(false);
 
   const recent = state.txns.slice(0, 10);
 
@@ -47,6 +50,16 @@ export default function Wallet() {
     } else {
       showToast(res.msg, "error");
     }
+  };
+
+  // "Got it" plays a rewarded ad before closing the thank-you popup.
+  const onGotIt = async () => {
+    if (adLoading) return;
+    setAdLoading(true);
+    await showRewardedAd();
+    setAdLoading(false);
+    setThanks(false);
+    setTab("payouts");
   };
 
   return (
@@ -66,16 +79,18 @@ export default function Wallet() {
           end={{ x: 1, y: 1 }}
           style={styles.balanceCard}
         >
-          <View style={styles.balanceTop}>
+          <View style={styles.balanceInfo}>
             <Text style={styles.balanceLabel}>AVAILABLE BALANCE</Text>
-            <Icon name="wallet" size={26} color={colors.brandPrimary} />
+            <AutoText style={styles.balancePts} lines={1} testID="wallet-balance">
+              {formatPoints(state.points)} pts
+            </AutoText>
+            <AutoText style={styles.balanceValue} lines={1}>
+              {formatRupees(pointsToRupees(state.points))} · 100 pts = ₹1
+            </AutoText>
           </View>
-          <Text style={styles.balancePts} testID="wallet-balance">
-            {formatPoints(state.points)} pts
-          </Text>
-          <Text style={styles.balanceValue}>
-            {formatRupees(pointsToRupees(state.points))} estimated value · 100 pts = ₹1
-          </Text>
+          <View style={styles.balanceIcon}>
+            <Icon name="wallet" size={30} color={colors.brandPrimary} />
+          </View>
         </LinearGradient>
 
         {/* Amount chips */}
@@ -126,10 +141,10 @@ export default function Wallet() {
           style={[styles.payBtn, !canRequest && styles.payBtnDisabled]}
           testID="wallet-request-button"
         >
-          <Text style={[styles.payBtnText, !canRequest && styles.payBtnTextDisabled]}>
+          <AutoText style={[styles.payBtnText, !canRequest && styles.payBtnTextDisabled]} lines={1}>
             Request {formatRupees(rupees)} Payout
-          </Text>
-          <Icon name="arrow-right" size={22} color={canRequest ? colors.onBrand : colors.muted} />
+          </AutoText>
+          <Icon name="arrow-right" size={20} color={canRequest ? colors.onBrand : colors.muted} />
         </Pressable>
 
         {/* History — selectable category: recent activity or payout history */}
@@ -230,13 +245,11 @@ export default function Wallet() {
             </Text>
             <Pressable
               style={styles.dialogBtn}
-              onPress={() => {
-                setThanks(false);
-                setTab("payouts");
-              }}
+              onPress={onGotIt}
+              disabled={adLoading}
               testID="wallet-thanks-ok"
             >
-              <Text style={styles.dialogBtnText}>Got it</Text>
+              {adLoading ? <ActivityIndicator color={colors.onBrand} /> : <Text style={styles.dialogBtnText}>Got it</Text>}
             </Pressable>
           </View>
         </View>
@@ -247,52 +260,53 @@ export default function Wallet() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
-  balanceCard: { borderRadius: 22, padding: 22, borderWidth: 1, borderColor: colors.border },
-  balanceTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  balanceLabel: { color: colors.muted, fontSize: 12, fontWeight: "800", letterSpacing: 1.2 },
-  balancePts: { color: colors.onSurface, fontSize: 44, fontWeight: "900", marginTop: 14 },
-  balanceValue: { color: colors.onSurfaceTertiary, fontSize: 13, marginTop: 8 },
-  chipRow: { flexDirection: "row", gap: 14, marginTop: 22 },
+  balanceCard: { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.border },
+  balanceInfo: { flex: 1 },
+  balanceLabel: { color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1.2 },
+  balancePts: { color: colors.onSurface, fontSize: 32, fontWeight: "900", marginTop: 2 },
+  balanceValue: { color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 4 },
+  balanceIcon: { width: 54, height: 54, borderRadius: 16, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
+  chipRow: { flexDirection: "row", gap: 12, marginTop: 16 },
   chip: {
     flex: 1,
-    paddingVertical: 20,
-    borderRadius: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: "center",
     backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
     borderColor: colors.border,
   },
   chipActive: { backgroundColor: colors.brandSecondary, borderColor: colors.brandPrimary },
-  chipText: { color: colors.onSurfaceSecondary, fontSize: 20, fontWeight: "800" },
+  chipText: { color: colors.onSurfaceSecondary, fontSize: 17, fontWeight: "800" },
   chipTextActive: { color: colors.brandPrimary },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     backgroundColor: colors.surfaceSecondary,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    marginTop: 22,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    marginTop: 14,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  input: { flex: 1, color: colors.onSurface, fontSize: 16, paddingVertical: 20 },
+  input: { flex: 1, color: colors.onSurface, fontSize: 15, paddingVertical: 14 },
   payBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
     backgroundColor: colors.brandPrimary,
-    borderRadius: 16,
-    paddingVertical: 20,
-    marginTop: 22,
+    borderRadius: 14,
+    paddingVertical: 16,
+    marginTop: 16,
   },
   payBtnDisabled: { backgroundColor: colors.surfaceTertiary },
-  payBtnText: { color: colors.onBrand, fontSize: 17, fontWeight: "800" },
+  payBtnText: { color: colors.onBrand, fontSize: 16, fontWeight: "800" },
   payBtnTextDisabled: { color: colors.muted },
   hint: { color: colors.muted, fontSize: 13, textAlign: "center", marginTop: 10 },
-  segWrap: { flexDirection: "row", gap: 8, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 6, marginTop: 30, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  segBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: "center" },
+  segWrap: { flexDirection: "row", gap: 8, backgroundColor: colors.surfaceSecondary, borderRadius: 14, padding: 5, marginTop: 22, marginBottom: 14, borderWidth: 1, borderColor: colors.border },
+  segBtn: { flex: 1, paddingVertical: 11, borderRadius: 11, alignItems: "center" },
   segBtnActive: { backgroundColor: colors.brandSecondary },
   segText: { color: colors.muted, fontSize: 14, fontWeight: "800" },
   segTextActive: { color: colors.brandPrimary },

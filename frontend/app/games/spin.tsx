@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -8,7 +8,8 @@ import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing, runOnJS
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { GAMES } from "@/src/constants/games";
 import { makeStyles, useTheme } from "@/src/theme";
 
@@ -33,29 +34,24 @@ export default function Spin() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints, canPlay } = useApp();
+  const S = useGameSession(GAME.id, "Spin & Win");
 
   const rotation = useSharedValue(0);
   const [spinning, setSpinning] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-  const [result, setResult] = useState<{ points: number } | null>(null);
-
-  useEffect(() => {
-    const t = setInterval(() => setRemaining(canPlay(GAME.id, GAME.cooldownMs).remainingMs), 500);
-    return () => clearInterval(t);
-  }, [canPlay]);
 
   const finish = (idx: number) => {
     setSpinning(false);
     const won = SEGMENTS[idx];
-    earnPoints({ gameId: GAME.id, points: won, title: "Spin & Win" });
-    setResult({ points: won });
+    S.finishRound(
+      won,
+      won > 0 ? "You won!" : "So close!",
+      won > 0 ? "The wheel landed in your favour" : "Better luck next spin",
+    );
   };
 
   const spin = () => {
     if (spinning) return;
-    const { ok } = canPlay(GAME.id, GAME.cooldownMs);
-    if (!ok) return;
+    if (!S.startRound()) return;
     setSpinning(true);
     const idx = Math.floor(Math.random() * SEGMENTS.length);
     const centerAngle = idx * SEG + SEG / 2;
@@ -69,12 +65,12 @@ export default function Spin() {
   };
 
   const wheelStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
-  const canSpin = remaining <= 0 && !spinning;
+  const canSpin = !spinning;
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Spin & Win" />
+      <ScreenHeader title="Spin & Win" right={<ChancesBadge gameId={GAME.id} onGetChances={() => S.setGetModal(true)} />} />
 
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={styles.blurb}>{GAME.blurb}</Text>
@@ -106,20 +102,19 @@ export default function Spin() {
 
         <Pressable style={[styles.spinBtn, !canSpin && styles.spinBtnDisabled]} onPress={spin} disabled={!canSpin} testID="spin-button">
           <Text style={[styles.spinText, !canSpin && { color: colors.muted }]}>
-            {spinning ? "Spinning..." : remaining > 0 ? `Wait ${Math.ceil(remaining / 1000)}s` : "SPIN"}
+            {spinning ? "Spinning..." : "SPIN"}
           </Text>
         </Pressable>
       </View>
 
       <GameResult
-        visible={!!result}
-        title={result && result.points > 0 ? "You won!" : "So close!"}
-        subtitle={result && result.points > 0 ? "The wheel landed in your favour" : "Better luck next spin"}
-        points={result?.points ?? 0}
-        playAgainLabel={remaining > 0 ? `Spin in ${Math.ceil(remaining / 1000)}s` : "Spin again"}
-        playAgainDisabled={remaining > 0}
-        onPlayAgain={() => setResult(null)}
+        visible={!!S.result}
+        title={S.result?.title ?? ""}
+        subtitle={S.result?.subtitle ?? ""}
+        points={S.result?.points ?? 0}
+        onClaim={S.claim}
       />
+      <GetChancesModal visible={S.getModal} gameId={GAME.id} onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

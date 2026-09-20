@@ -7,7 +7,8 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const ICONS = ["heart", "star", "diamond-stone", "bell", "flower", "leaf", "lightning-bolt", "cube"];
@@ -26,28 +27,27 @@ export default function Puzzle() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("puzzle", "Puzzle Dash");
 
   const [deck, setDeck] = useState<Card[]>(buildDeck);
   const [picked, setPicked] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [locked, setLocked] = useState(false);
-  const [won, setWon] = useState(false);
-  const [reward, setReward] = useState(0);
+  const [started, setStarted] = useState(false);
 
   const matchedCount = useMemo(() => deck.filter((c) => c.matched).length, [deck]);
 
   useEffect(() => {
-    if (matchedCount === deck.length && !won) {
-      setWon(true);
-      const r = Math.max(50, 300 - moves * 10);
-      setReward(r);
-      earnPoints({ gameId: "puzzle", points: r, title: "Puzzle Dash" });
+    if (started && matchedCount === deck.length) {
+      setStarted(false);
+      S.finishRound(Math.max(50, 300 - moves * 10), "Puzzle solved!", `Completed in ${moves} moves`);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchedCount]);
 
   const onFlip = (idx: number) => {
-    if (locked || deck[idx].flipped || deck[idx].matched) return;
+    if (locked || deck[idx].flipped || deck[idx].matched || S.result) return;
+    if (!started) { if (!S.startRound()) return; setStarted(true); }
     const next = deck.map((c, i) => (i === idx ? { ...c, flipped: true } : c));
     const nowPicked = [...picked, idx];
     setDeck(next);
@@ -73,12 +73,12 @@ export default function Puzzle() {
     }
   };
 
-  const restart = () => {
+  const reset = () => {
     setDeck(buildDeck());
     setPicked([]);
     setMoves(0);
-    setWon(false);
     setLocked(false);
+    setStarted(false);
   };
 
   return (
@@ -86,11 +86,7 @@ export default function Puzzle() {
       <StatusBar style="light" />
       <ScreenHeader
         title="Puzzle Dash"
-        right={
-          <Pressable onPress={restart} hitSlop={10} testID="puzzle-restart-button">
-            <Icon name="refresh" size={24} color={colors.brandPrimary} />
-          </Pressable>
-        }
+        right={<ChancesBadge gameId="puzzle" onGetChances={() => S.setGetModal(true)} />}
       />
 
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
@@ -123,16 +119,17 @@ export default function Puzzle() {
           })}
         </View>
 
-        {won ? null : <Text style={styles.hint}>Fewer moves earn more points (min 50).</Text>}
+        {S.result ? null : <Text style={styles.hint}>Fewer moves earn more points (min 50).</Text>}
       </View>
 
       <GameResult
-        visible={won}
-        title="Puzzle solved!"
-        subtitle={`Completed in ${moves} moves`}
-        points={reward}
-        onPlayAgain={restart}
+        visible={!!S.result}
+        title={S.result?.title ?? ""}
+        subtitle={S.result?.subtitle ?? ""}
+        points={S.result?.points ?? 0}
+        onClaim={() => { S.claim(); reset(); }}
       />
+      <GetChancesModal visible={S.getModal} gameId="puzzle" onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

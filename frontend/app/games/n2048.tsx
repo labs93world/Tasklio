@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const N = 4;
@@ -83,11 +84,11 @@ export default function N2048() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("n2048", "2048");
 
   const [grid, setGrid] = useState<Grid>(init);
   const [score, setScore] = useState(0);
-  const [result, setResult] = useState<{ points: number } | null>(null);
+  const [started, setStarted] = useState(false);
 
   const tileColor = (v: number) => {
     if (v === 0) return colors.surfaceTertiary;
@@ -99,7 +100,8 @@ export default function N2048() {
   const textColor = (v: number) => (v > 4 && v <= 16 ? colors.onSurface : v > 16 ? colors.onBrand : colors.onSurface);
 
   const doMove = (dir: "left" | "right" | "up" | "down") => {
-    if (result) return;
+    if (S.result) return;
+    if (!started) { if (!S.startRound()) return; setStarted(true); }
     const { grid: moved, gained } = move(grid, dir);
     if (same(moved, grid)) return;
     const next = spawn(moved);
@@ -110,21 +112,21 @@ export default function N2048() {
   };
 
   const finish = (s: number) => {
-    earnPoints({ gameId: "n2048", points: s, title: "2048" });
-    setResult({ points: s });
+    setStarted(false);
+    S.finishRound(s, "Great game!", "Every point converts to reward points");
   };
 
   const cashOut = () => {
-    if (result || score === 0) return;
+    if (S.result || score === 0) return;
     finish(score);
   };
 
-  const reset = () => { setGrid(init()); setScore(0); setResult(null); };
+  const reset = () => { setGrid(init()); setScore(0); setStarted(false); };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="2048" />
+      <ScreenHeader title="2048" right={<ChancesBadge gameId="n2048" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={styles.score}>Score: {score}</Text>
 
@@ -152,7 +154,8 @@ export default function N2048() {
         </Pressable>
       </View>
 
-      <GameResult visible={!!result} title="Great game!" subtitle="Every point converts to reward points" points={result?.points ?? 0} onPlayAgain={reset} />
+      <GameResult visible={!!S.result} title={S.result?.title ?? ""} subtitle={S.result?.subtitle ?? ""} points={S.result?.points ?? 0} onClaim={() => { S.claim(); reset(); }} />
+      <GetChancesModal visible={S.getModal} gameId="n2048" onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

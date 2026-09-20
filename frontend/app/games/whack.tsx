@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const DURATION = 15;
@@ -16,7 +17,7 @@ export default function Whack() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("whack", "Whack-a-Mole");
 
   const [phase, setPhase] = useState<"idle" | "running" | "done">("idle");
   const [active, setActive] = useState(-1);
@@ -28,6 +29,7 @@ export default function Whack() {
   useEffect(() => () => { clearInterval(clock.current); clearInterval(mole.current); }, []);
 
   const start = () => {
+    if (!S.startRound()) return;
     setHits(0);
     setLeft(DURATION);
     setPhase("running");
@@ -48,7 +50,8 @@ export default function Whack() {
   };
 
   useEffect(() => {
-    if (phase === "done") earnPoints({ gameId: "whack", points: hits * PER, title: "Whack-a-Mole" });
+    if (phase === "done") S.finishRound(hits * PER, "Time's up!", `You whacked ${hits} moles`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   const whack = (i: number) => {
@@ -60,7 +63,7 @@ export default function Whack() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Whack-a-Mole" />
+      <ScreenHeader title="Whack-a-Mole" right={<ChancesBadge gameId="whack" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.statsRow}>
           <Text style={styles.stat}>Hits: {hits}</Text>
@@ -82,7 +85,14 @@ export default function Whack() {
         ) : null}
       </View>
 
-      <GameResult visible={phase === "done"} title="Time's up!" subtitle={`You whacked ${hits} moles`} points={hits * PER} onPlayAgain={start} />
+      <GameResult
+        visible={!!S.result}
+        title={S.result?.title ?? ""}
+        subtitle={S.result?.subtitle ?? ""}
+        points={S.result?.points ?? 0}
+        onClaim={() => { S.claim(); setPhase("idle"); }}
+      />
+      <GetChancesModal visible={S.getModal} gameId="whack" onClose={() => S.setGetModal(false)} onGranted={start} />
     </View>
   );
 }

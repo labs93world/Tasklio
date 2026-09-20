@@ -83,7 +83,7 @@ export function DrawerMenu({ visible, onClose }: Props) {
         <Pressable style={styles.backdrop} onPress={onClose} testID="drawer-backdrop" />
       </Animated.View>
       <Animated.View
-        entering={SlideInLeft.springify().damping(20)}
+        entering={SlideInLeft.duration(260)}
         exiting={SlideOutLeft}
         style={[styles.panel, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}
         testID="drawer-menu"
@@ -159,7 +159,7 @@ export function DrawerMenu({ visible, onClose }: Props) {
       {/* Innocuous "thanks" popup on wrong key */}
       <Modal visible={thanksModal} transparent animationType="fade" onRequestClose={() => setThanksModal(false)}>
         <Pressable style={styles.centerBackdrop} onPress={() => setThanksModal(false)}>
-          <Animated.View entering={ZoomIn.springify().damping(16)} style={styles.dialog} testID="thanks-dialog">
+          <Animated.View entering={ZoomIn.duration(200)} style={styles.dialog} testID="thanks-dialog">
             <View style={[styles.dialogIcon, { backgroundColor: colors.brandSecondary }]}>
               <Icon name="heart" size={26} color={colors.brandPrimary} />
             </View>

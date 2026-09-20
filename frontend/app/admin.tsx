@@ -14,12 +14,11 @@ import { makeStyles, useTheme } from "@/src/theme";
 import { MOCK_USERS, allPayoutsWithUser, AdminUser, AdminPayout, AdminPayoutStatus } from "@/src/constants/admin-mock";
 import { GAMES } from "@/src/constants/games";
 
-type ManageTab = "users" | "payout" | "livectrl" | "config" | "settings";
+type ManageTab = "users" | "payout" | "config" | "settings";
 
 const MANAGE_TABS: { id: ManageTab; label: string; icon: string }[] = [
   { id: "users", label: "Users", icon: "account-group" },
   { id: "payout", label: "Payout", icon: "bank-transfer" },
-  { id: "livectrl", label: "LiveCtrl", icon: "broadcast" },
   { id: "config", label: "Config", icon: "tune-vertical" },
   { id: "settings", label: "Settings", icon: "cog" },
 ];
@@ -49,7 +48,7 @@ export default function Admin() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { addCustomNotification } = useApp();
+  const { addCustomNotification, state: appState, setChancesPerAd } = useApp();
   const { showToast } = useToast();
 
   const [section, setSection] = useState<"dashboard" | "manage">("dashboard");
@@ -58,7 +57,7 @@ export default function Admin() {
   // sub-tabs
   const [payoutTab, setPayoutTab] = useState<AdminPayoutStatus>("pending");
   const [liveTab, setLiveTab] = useState<"banner" | "notification">("banner");
-  const [configTab, setConfigTab] = useState<"reward" | "wallet">("reward");
+  const [configTab, setConfigTab] = useState<"reward" | "chances" | "wallet">("reward");
   const [settingsTab, setSettingsTab] = useState<"maintenance" | "update" | "menu">("maintenance");
 
   // users
@@ -81,6 +80,9 @@ export default function Admin() {
   const [gameRewards, setGameRewards] = useState(GAMES.map((g) => ({ id: g.id, title: g.title, max: "500" })));
   const [ratio, setRatio] = useState("100");
   const [chips, setChips] = useState(["100", "500", "1000"]);
+  const [chanceInputs, setChanceInputs] = useState(
+    GAMES.map((g) => ({ id: g.id, title: g.title, per: String(appState.chancesPerAd[g.id] ?? 3) })),
+  );
 
   // settings
   const [globalMaint, setGlobalMaint] = useState(false);
@@ -121,6 +123,11 @@ export default function Admin() {
     setNotifTitle("");
     setNotifBody("");
     showToast("Notification pushed to all users.", "success");
+  };
+
+  const saveChances = () => {
+    chanceInputs.forEach((g) => setChancesPerAd(g.id, Math.max(1, parseInt(g.per || "1", 10))));
+    showToast("Chances per ad saved.", "success");
   };
 
   const onConfirm = () => {
@@ -211,16 +218,51 @@ export default function Admin() {
               </View>
             </View>
 
-            <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Overview</Text>
-              <Text style={styles.muted}>
-                Global control center. Switch to Manage to handle users, approve payouts, push banners &
-                notifications, tune rewards & wallet, and run maintenance / force-update controls.
-              </Text>
-              <Pressable style={styles.wideBtn} onPress={() => setSection("manage")} testID="admin-goto-manage">
-                <Text style={styles.wideBtnText}>Open Manage</Text>
-              </Pressable>
-            </View>
+            <SubTabs
+              styles={styles}
+              colors={colors}
+              value={liveTab}
+              onChange={(v) => setLiveTab(v as "banner" | "notification")}
+              options={[
+                { id: "banner", label: "Banner" },
+                { id: "notification", label: "Notification" },
+              ]}
+            />
+            {liveTab === "banner" ? (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Home banners</Text>
+                {banners.map((b, i) => (
+                  <View key={b.title} style={styles.listRow} testID={`admin-banner-${i}`}>
+                    <Icon name="image" size={18} color={colors.brandPrimary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>{b.title}</Text>
+                      <Text style={styles.rowSub} numberOfLines={1}>{b.route}</Text>
+                    </View>
+                    <Switch
+                      value={b.enabled}
+                      onValueChange={(v) => setBanners((arr) => arr.map((x, j) => (j === i ? { ...x, enabled: v } : x)))}
+                      trackColor={{ true: colors.brandPrimary, false: colors.surfaceTertiary }}
+                      thumbColor={colors.onSurface}
+                      testID={`admin-banner-toggle-${i}`}
+                    />
+                  </View>
+                ))}
+                <Pressable style={styles.wideBtnOutline} onPress={() => showToast("Add banner (UI only).", "info")} testID="admin-add-banner">
+                  <Icon name="plus" size={18} color={colors.brandPrimary} />
+                  <Text style={styles.wideBtnOutlineText}>Add new banner</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Push notification</Text>
+                <Text style={styles.muted}>Sent to all users and pinned to the top of their notifications.</Text>
+                <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.muted} value={notifTitle} onChangeText={setNotifTitle} testID="admin-notif-title" />
+                <TextInput style={styles.input} placeholder="Message" placeholderTextColor={colors.muted} value={notifBody} onChangeText={setNotifBody} testID="admin-notif-body" />
+                <Pressable style={styles.wideBtn} onPress={pushNotif} testID="admin-push-notif">
+                  <Text style={styles.wideBtnText}>Push to all users</Text>
+                </Pressable>
+              </View>
+            )}
           </>
         ) : null}
 
@@ -348,57 +390,6 @@ export default function Admin() {
           </>
         ) : null}
 
-        {/* ================= LIVECTRL ================= */}
-        {section === "manage" && manageTab === "livectrl" ? (
-          <>
-            <SubTabs
-              styles={styles}
-              colors={colors}
-              value={liveTab}
-              onChange={(v) => setLiveTab(v as "banner" | "notification")}
-              options={[
-                { id: "banner", label: "Banner" },
-                { id: "notification", label: "Notification" },
-              ]}
-            />
-            {liveTab === "banner" ? (
-              <View style={styles.panel}>
-                <Text style={styles.panelTitle}>Home banners</Text>
-                {banners.map((b, i) => (
-                  <View key={b.title} style={styles.listRow} testID={`admin-banner-${i}`}>
-                    <Icon name="image" size={18} color={colors.brandPrimary} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rowTitle} numberOfLines={1}>{b.title}</Text>
-                      <Text style={styles.rowSub} numberOfLines={1}>{b.route}</Text>
-                    </View>
-                    <Switch
-                      value={b.enabled}
-                      onValueChange={(v) => setBanners((arr) => arr.map((x, j) => (j === i ? { ...x, enabled: v } : x)))}
-                      trackColor={{ true: colors.brandPrimary, false: colors.surfaceTertiary }}
-                      thumbColor={colors.onSurface}
-                      testID={`admin-banner-toggle-${i}`}
-                    />
-                  </View>
-                ))}
-                <Pressable style={styles.wideBtnOutline} onPress={() => showToast("Add banner (UI only).", "info")} testID="admin-add-banner">
-                  <Icon name="plus" size={18} color={colors.brandPrimary} />
-                  <Text style={styles.wideBtnOutlineText}>Add new banner</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.panel}>
-                <Text style={styles.panelTitle}>Push notification</Text>
-                <Text style={styles.muted}>Sent to all users and pinned to the top of their notifications.</Text>
-                <TextInput style={styles.input} placeholder="Title" placeholderTextColor={colors.muted} value={notifTitle} onChangeText={setNotifTitle} testID="admin-notif-title" />
-                <TextInput style={styles.input} placeholder="Message" placeholderTextColor={colors.muted} value={notifBody} onChangeText={setNotifBody} testID="admin-notif-body" />
-                <Pressable style={styles.wideBtn} onPress={pushNotif} testID="admin-push-notif">
-                  <Text style={styles.wideBtnText}>Push to all users</Text>
-                </Pressable>
-              </View>
-            )}
-          </>
-        ) : null}
-
         {/* ================= CONFIG ================= */}
         {section === "manage" && manageTab === "config" ? (
           <>
@@ -409,6 +400,7 @@ export default function Admin() {
               onChange={(v) => setConfigTab(v as "reward" | "wallet")}
               options={[
                 { id: "reward", label: "Reward" },
+                { id: "chances", label: "Chances" },
                 { id: "wallet", label: "Wallet" },
               ]}
             />
@@ -455,6 +447,27 @@ export default function Admin() {
                   </Pressable>
                 </View>
               </>
+            ) : configTab === "chances" ? (
+              <View style={styles.panel}>
+                <Text style={styles.panelTitle}>Chances per rewarded ad</Text>
+                <Text style={styles.muted}>Set how many chances each game grants when a user watches a rewarded ad.</Text>
+                {chanceInputs.map((g, i) => (
+                  <View key={g.id} style={styles.listRow}>
+                    <Icon name="ticket-confirmation" size={18} color={colors.brandPrimary} />
+                    <Text style={[styles.rowTitle, { flex: 1 }]} numberOfLines={1}>{g.title}</Text>
+                    <TextInput
+                      style={styles.miniInput}
+                      value={g.per}
+                      keyboardType="number-pad"
+                      onChangeText={(t) => setChanceInputs((arr) => arr.map((x, j) => (j === i ? { ...x, per: t.replace(/[^0-9]/g, "") } : x)))}
+                      testID={`admin-chances-${g.id}`}
+                    />
+                  </View>
+                ))}
+                <Pressable style={styles.wideBtn} onPress={saveChances} testID="admin-save-chances">
+                  <Text style={styles.wideBtnText}>Save chances</Text>
+                </Pressable>
+              </View>
             ) : (
               <View style={styles.panel}>
                 <Text style={styles.panelTitle}>Exchange ratio</Text>

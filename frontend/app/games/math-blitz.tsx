@@ -5,7 +5,8 @@ import { StatusBar } from "expo-status-bar";
 
 import { ScreenHeader } from "@/src/components/screen-header";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 const DURATION = 20;
@@ -25,7 +26,7 @@ export default function MathBlitz() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("math", "Math Blitz");
 
   const [phase, setPhase] = useState<"idle" | "running" | "done">("idle");
   const [q, setQ] = useState(makeQ);
@@ -36,6 +37,7 @@ export default function MathBlitz() {
   useEffect(() => () => clearInterval(clock.current), []);
 
   const start = () => {
+    if (!S.startRound()) return;
     setCorrect(0);
     setLeft(DURATION);
     setQ(makeQ());
@@ -49,7 +51,8 @@ export default function MathBlitz() {
   };
 
   useEffect(() => {
-    if (phase === "done") earnPoints({ gameId: "math", points: correct * PER, title: "Math Blitz" });
+    if (phase === "done") S.finishRound(correct * PER, "Time's up!", `${correct} correct answers`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   const answer = (n: number) => {
@@ -61,7 +64,7 @@ export default function MathBlitz() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Math Blitz" />
+      <ScreenHeader title="Math Blitz" right={<ChancesBadge gameId="math" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <View style={styles.statsRow}>
           <Text style={styles.stat}>Correct: {correct}</Text>
@@ -87,7 +90,8 @@ export default function MathBlitz() {
         ) : null}
       </View>
 
-      <GameResult visible={phase === "done"} title="Time's up!" subtitle={`${correct} correct answers`} points={correct * PER} onPlayAgain={start} />
+      <GameResult visible={!!S.result} title={S.result?.title ?? ""} subtitle={S.result?.subtitle ?? ""} points={S.result?.points ?? 0} onClaim={() => { S.claim(); setPhase("idle"); }} />
+      <GetChancesModal visible={S.getModal} gameId="math" onClose={() => S.setGetModal(false)} onGranted={start} />
     </View>
   );
 }

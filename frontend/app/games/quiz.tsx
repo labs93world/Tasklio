@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 type Q = { q: string; options: string[]; answer: number };
@@ -30,15 +31,24 @@ export default function Quiz() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("quiz", "Quiz Time");
 
+  const [started, setStarted] = useState(false);
   const [questions, setQuestions] = useState<Q[]>(pickQuestions);
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [correct, setCorrect] = useState(0);
-  const [result, setResult] = useState<{ correct: number; points: number } | null>(null);
 
   const current = questions[idx];
+
+  const begin = () => {
+    if (!S.startRound()) return;
+    setQuestions(pickQuestions());
+    setIdx(0);
+    setSelected(null);
+    setCorrect(0);
+    setStarted(true);
+  };
 
   const choose = (i: number) => {
     if (selected !== null) return;
@@ -52,74 +62,81 @@ export default function Quiz() {
       } else {
         const finalCorrect = correct + (isRight ? 1 : 0);
         const reward = finalCorrect * PER_CORRECT;
-        earnPoints({ gameId: "quiz", points: reward, title: "Quiz Time" });
-        setResult({ correct: finalCorrect, points: reward });
+        setStarted(false);
+        S.finishRound(reward, "Quiz complete!", `${finalCorrect}/${questions.length} correct answers`);
       }
     }, 700);
-  };
-
-  const restart = () => {
-    setQuestions(pickQuestions());
-    setIdx(0);
-    setSelected(null);
-    setCorrect(0);
-    setResult(null);
   };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Quiz Time" />
+      <ScreenHeader title="Quiz Time" right={<ChancesBadge gameId="quiz" onGetChances={() => S.setGetModal(true)} />} />
 
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
-        <View style={styles.progressRow}>
-          <Text style={styles.progressText}>
-            Question {idx + 1} of {questions.length}
-          </Text>
-          <Text style={styles.scoreText}>Score: {correct * PER_CORRECT}</Text>
-        </View>
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(idx / questions.length) * 100}%` }]} />
-        </View>
+        {!started ? (
+          <View style={styles.startWrap}>
+            <View style={styles.startIcon}>
+              <Icon name="head-question" size={42} color={colors.accentQuiz} />
+            </View>
+            <Text style={styles.startTitle}>Quiz Time</Text>
+            <Text style={styles.startBlurb}>Answer 5 questions and earn {PER_CORRECT} points for each correct pick.</Text>
+            <Pressable style={styles.startBtn} onPress={begin} testID="quiz-start">
+              <Text style={styles.startBtnText}>Start Quiz</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <View style={styles.progressRow}>
+              <Text style={styles.progressText}>
+                Question {idx + 1} of {questions.length}
+              </Text>
+              <Text style={styles.scoreText}>Score: {correct * PER_CORRECT}</Text>
+            </View>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${(idx / questions.length) * 100}%` }]} />
+            </View>
 
-        <Text style={styles.question}>{current.q}</Text>
+            <Text style={styles.question}>{current.q}</Text>
 
-        <View style={{ gap: 14, marginTop: 8 }}>
-          {current.options.map((opt, i) => {
-            const isAnswer = i === current.answer;
-            const isPicked = selected === i;
-            let stateStyle = null;
-            if (selected !== null) {
-              if (isAnswer) stateStyle = styles.optCorrect;
-              else if (isPicked) stateStyle = styles.optWrong;
-            }
-            return (
-              <Pressable
-                key={i}
-                style={[styles.option, stateStyle]}
-                onPress={() => choose(i)}
-                testID={`quiz-option-${i}`}
-              >
-                <Text style={styles.optionText}>{opt}</Text>
-                {selected !== null && isAnswer ? (
-                  <Icon name="check-circle" size={22} color={colors.success} />
-                ) : selected !== null && isPicked ? (
-                  <Icon name="close-circle" size={22} color={colors.error} />
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
+            <View style={{ gap: 14, marginTop: 8 }}>
+              {current.options.map((opt, i) => {
+                const isAnswer = i === current.answer;
+                const isPicked = selected === i;
+                let stateStyle = null;
+                if (selected !== null) {
+                  if (isAnswer) stateStyle = styles.optCorrect;
+                  else if (isPicked) stateStyle = styles.optWrong;
+                }
+                return (
+                  <Pressable
+                    key={i}
+                    style={[styles.option, stateStyle]}
+                    onPress={() => choose(i)}
+                    testID={`quiz-option-${i}`}
+                  >
+                    <Text style={styles.optionText}>{opt}</Text>
+                    {selected !== null && isAnswer ? (
+                      <Icon name="check-circle" size={22} color={colors.success} />
+                    ) : selected !== null && isPicked ? (
+                      <Icon name="close-circle" size={22} color={colors.error} />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
       </View>
 
       <GameResult
-        visible={!!result}
-        title={result && result.points > 0 ? "Quiz complete!" : "Quiz complete"}
-        subtitle={result ? `${result.correct}/${questions.length} correct answers` : ""}
-        points={result?.points ?? 0}
-        playAgainLabel="Play again"
-        onPlayAgain={restart}
+        visible={!!S.result}
+        title={S.result?.title ?? ""}
+        subtitle={S.result?.subtitle ?? ""}
+        points={S.result?.points ?? 0}
+        onClaim={S.claim}
       />
+      <GetChancesModal visible={S.getModal} gameId="quiz" onClose={() => S.setGetModal(false)} onGranted={begin} />
     </View>
   );
 }
@@ -146,4 +163,10 @@ const useStyles = makeStyles((colors) => ({
   optCorrect: { backgroundColor: colors.surfaceTertiary, borderColor: colors.success },
   optWrong: { backgroundColor: colors.surfaceTertiary, borderColor: colors.error },
   optionText: { color: colors.onSurfaceSecondary, fontSize: 17, fontWeight: "600", flex: 1 },
+  startWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  startIcon: { width: 88, height: 88, borderRadius: 26, backgroundColor: colors.accentQuizSoft, alignItems: "center", justifyContent: "center" },
+  startTitle: { color: colors.onSurface, fontSize: 24, fontWeight: "900", marginTop: 6 },
+  startBlurb: { color: colors.onSurfaceTertiary, fontSize: 15, textAlign: "center", lineHeight: 22, paddingHorizontal: 20 },
+  startBtn: { marginTop: 18, backgroundColor: colors.brandPrimary, borderRadius: 16, paddingVertical: 16, paddingHorizontal: 56 },
+  startBtnText: { color: colors.onBrand, fontSize: 18, fontWeight: "800" },
 }));

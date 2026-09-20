@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { Icon } from "@/src/components/icon";
+import { AutoText } from "@/src/components/auto-text";
 import { DrawerMenu } from "@/src/components/drawer-menu";
 import { AuthModal } from "@/src/components/auth-modal";
 import { GameResult } from "@/src/components/game-result";
@@ -40,10 +41,10 @@ export default function Home() {
   const styles = useStyles();
   const { colors } = useTheme();
   const router = useRouter();
-  const { state, claimDailyCheckin } = useApp();
+  const { state, claimDailyCheckin, getMissions } = useApp();
   const [drawer, setDrawer] = useState(false);
   const [page, setPage] = useState(0);
-  const [checkinResult, setCheckinResult] = useState<{ reward: number; day: number } | null>(null);
+  const [showCheckinPopup, setShowCheckinPopup] = useState(false);
   const bannerRef = useRef<ScrollView>(null);
   const pageRef = useRef(0);
 
@@ -51,11 +52,9 @@ export default function Home() {
   const showCheckin = canClaimCheckin(state);
   const checkinDay = nextCheckinDay(state);
   const checkinReward = CHECKIN_REWARDS[checkinDay - 1];
+  const missions = getMissions();
 
-  const onClaimCheckin = () => {
-    const res = claimDailyCheckin();
-    if (res) setCheckinResult(res);
-  };
+  const onClaimCheckin = () => setShowCheckinPopup(true);
 
   // Auto-advance banner
   useEffect(() => {
@@ -80,23 +79,19 @@ export default function Home() {
 
       <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Pressable onPress={() => setDrawer(true)} hitSlop={10} style={styles.hMenu} testID="home-menu-button">
-          <Icon name="menu" size={24} color={colors.onSurface} />
+          <Icon name="menu" size={22} color={colors.onSurface} />
         </Pressable>
         <View style={styles.hCenter}>
-          <Text style={styles.greeting} numberOfLines={1}>
-            Hii, {state.profile.name || "Guest"}
-          </Text>
-          <Text style={styles.subGreeting} numberOfLines={1}>
-            Let&apos;s earn some rewards today
-          </Text>
+          <AutoText style={styles.greeting}>Hii, {state.profile.name || "Guest"}</AutoText>
+          <AutoText style={styles.subGreeting}>Let&apos;s earn some rewards today</AutoText>
         </View>
         <View style={styles.hRight}>
           <Pressable onPress={() => router.push("/wallet")} style={styles.pointsBadge} testID="home-points-badge">
-            <Icon name="star" size={14} color={colors.brandPrimary} />
+            <Icon name="star" size={13} color={colors.brandPrimary} />
             <Text style={styles.pointsText}>{formatPoints(state.points)}</Text>
           </Pressable>
-          <Pressable onPress={() => router.push("/notifications")} hitSlop={10} style={styles.bell} testID="home-bell-button">
-            <Icon name="bell-outline" size={24} color={colors.onSurface} />
+          <Pressable onPress={() => router.push("/notifications")} hitSlop={8} style={styles.bell} testID="home-bell-button">
+            <Icon name="bell-outline" size={18} color={colors.onSurface} />
             {unread > 0 ? <View style={styles.dot} /> : null}
           </Pressable>
         </View>
@@ -124,8 +119,8 @@ export default function Home() {
                   <Icon name={b.icon} size={26} color={colors[b.tint] as string} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.bannerTitle}>{b.title}</Text>
-                  <Text style={styles.bannerBody}>{b.body}</Text>
+                  <AutoText style={styles.bannerTitle} lines={1}>{b.title}</AutoText>
+                  <AutoText style={styles.bannerBody} lines={2}>{b.body}</AutoText>
                 </View>
               </Pressable>
             </View>
@@ -212,18 +207,41 @@ export default function Home() {
             </View>
           ))}
         </ScrollView>
+
+        {/* Daily missions */}
+        <View style={styles.missionsWrap}>
+          <Text style={styles.sectionTitle}>Daily Missions</Text>
+          {missions.map((m) => (
+            <View key={m.id} style={styles.missionRow} testID={`home-mission-${m.id}`}>
+              <View style={[styles.missionIcon, m.done && styles.missionIconDone]}>
+                <Icon name={m.done ? "check-bold" : m.icon} size={18} color={m.done ? colors.onSuccess : colors.brandPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.missionTop}>
+                  <AutoText style={styles.missionLabel}>{m.label}</AutoText>
+                  <Text style={styles.missionCount}>
+                    {m.current}/{m.target}
+                  </Text>
+                </View>
+                <View style={styles.missionBar}>
+                  <View style={[styles.missionFill, { width: `${(m.current / m.target) * 100}%` }, m.done && { backgroundColor: colors.success }]} />
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
       </ScrollView>
 
       <DrawerMenu visible={drawer} onClose={() => setDrawer(false)} />
       <AuthModal visible={!state.loggedIn} />
 
       <GameResult
-        visible={!!checkinResult}
-        title="Check-in complete!"
-        subtitle={checkinResult ? `Day ${checkinResult.day} streak reward claimed` : ""}
-        points={checkinResult?.reward ?? 0}
-        playAgainLabel="Awesome!"
-        onPlayAgain={() => setCheckinResult(null)}
+        visible={showCheckinPopup}
+        title="Daily Check-in"
+        subtitle={`Day ${checkinDay} of 7 reward`}
+        points={checkinReward}
+        claimLabel={`Claim ${checkinReward} points`}
+        onClaim={() => { claimDailyCheckin(); setShowCheckinPopup(false); }}
       />
     </View>
   );
@@ -233,14 +251,14 @@ const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 14, backgroundColor: colors.surface },
   hMenu: { width: 32, height: 40, alignItems: "flex-start", justifyContent: "center" },
-  hCenter: { flex: 1, marginLeft: 6 },
-  greeting: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
-  subGreeting: { color: colors.muted, fontSize: 12, marginTop: 1 },
-  hRight: { flexDirection: "row", alignItems: "center", gap: 6 },
-  pointsBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 18, borderWidth: 1, borderColor: colors.border },
-  pointsText: { color: colors.onSurface, fontSize: 14, fontWeight: "800" },
-  bell: { width: 32, height: 40, alignItems: "flex-end", justifyContent: "center" },
-  dot: { position: "absolute", top: 9, right: 0, width: 9, height: 9, borderRadius: 5, backgroundColor: colors.error, borderWidth: 2, borderColor: colors.surface },
+  hCenter: { flex: 1, marginLeft: 6, marginRight: 16 },
+  greeting: { color: colors.onSurface, fontSize: 15, fontWeight: "800" },
+  subGreeting: { color: colors.muted, fontSize: 11, marginTop: 1 },
+  hRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pointsBadge: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: colors.border },
+  pointsText: { color: colors.onSurface, fontSize: 13, fontWeight: "800" },
+  bell: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.surfaceTertiary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  dot: { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error, borderWidth: 1.5, borderColor: colors.surfaceTertiary },
   banner: { flexDirection: "row", alignItems: "center", gap: 16, backgroundColor: colors.surfaceSecondary, borderRadius: 20, padding: 18, borderWidth: 1, borderColor: colors.border, marginHorizontal: 16 },
   bannerIcon: { width: 52, height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   bannerTitle: { color: colors.onSurface, fontSize: 18, fontWeight: "800" },
@@ -270,4 +288,14 @@ const useStyles = makeStyles((colors) => ({
   gameTile: { alignItems: "center", width: 68 },
   gameIcon: { width: 62, height: 62, borderRadius: 18, alignItems: "center", justifyContent: "center", marginBottom: 8 },
   gameLabel: { color: colors.onSurfaceSecondary, fontSize: 11, fontWeight: "700", textAlign: "center" },
+  missionsWrap: { marginHorizontal: 16, marginTop: 26, gap: 12 },
+  sectionTitle: { color: colors.onSurface, fontSize: 17, fontWeight: "900", marginBottom: 2 },
+  missionRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.surfaceSecondary, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.border },
+  missionIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
+  missionIconDone: { backgroundColor: colors.success },
+  missionTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 },
+  missionLabel: { flex: 1, color: colors.onSurfaceSecondary, fontSize: 14, fontWeight: "700" },
+  missionCount: { color: colors.muted, fontSize: 13, fontWeight: "800" },
+  missionBar: { height: 7, borderRadius: 4, backgroundColor: colors.surfaceTertiary, overflow: "hidden" },
+  missionFill: { height: 7, borderRadius: 4, backgroundColor: colors.brandPrimary },
 }));

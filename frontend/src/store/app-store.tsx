@@ -5,7 +5,7 @@ import * as DocumentPicker from "expo-document-picker";
 
 import { storage } from "@/src/utils/storage";
 import { uid } from "@/src/utils/format";
-import { POINTS_PER_RUPEE } from "@/src/constants/games";
+import { POINTS_PER_RUPEE, GAMES } from "@/src/constants/games";
 
 const STATE_KEY = "tasklio_state_v3";
 const BACKUP_FILE = FileSystem.documentDirectory + "tasklio_backup.json";
@@ -53,6 +53,13 @@ export type AppState = {
   adminPin: string;
   lastDailyReminder: string; // yyyy-mm-dd
   checkin: { lastClaim: string; streak: number }; // yyyy-mm-dd + current day 1-7
+  chances: Record<string, number>; // per-game remaining chances
+  chancesPerAd: Record<string, number>; // per-game chances granted per rewarded ad
+  // Daily missions (reset each calendar day)
+  missionDate: string;
+  mGames: number;
+  mPoints: number;
+  mCheckin: boolean;
 };
 
 // Daily check-in rewards grow across a 7-day streak, then cycle back to day 1.
@@ -98,7 +105,19 @@ function seedState(): AppState {
     adminPin: "1234",
     lastDailyReminder: "",
     checkin: { lastClaim: "", streak: 0 },
+    chances: Object.fromEntries(GAMES.map((g) => [g.id, 3])),
+    chancesPerAd: Object.fromEntries(GAMES.map((g) => [g.id, 3])),
+    missionDate: todayKey(),
+    mGames: 0,
+    mPoints: 0,
+    mCheckin: false,
   };
+}
+
+// Reset daily-mission counters when the calendar day changes.
+function ensureMissionDay(s: AppState): AppState {
+  if (s.missionDate === todayKey()) return s;
+  return { ...s, missionDate: todayKey(), mGames: 0, mPoints: 0, mCheckin: false };
 }
 
 // Add the 5am "Daily rewards are live" reminder once per day (offline, on open).
@@ -138,6 +157,12 @@ type Ctx = {
   logout: () => void;
   // gameplay
   earnPoints: (opts: { gameId?: string; points: number; title: string }) => void;
+  chancesFor: (gameId: string) => number;
+  consumeChance: (gameId: string) => void;
+  addChances: (gameId: string) => void;
+  chancesPerAd: (gameId: string) => number;
+  setChancesPerAd: (gameId: string, n: number) => void;
+  getMissions: () => { id: string; icon: string; label: string; current: number; target: number; done: boolean }[];
   claimDailyCheckin: () => { reward: number; day: number } | null;
   requestPayout: (amountRupees: number, upi: string) => AuthResult;
   canPlay: (gameId: string, cooldownMs: number) => { ok: boolean; remainingMs: number };
@@ -226,25 +251,66 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const logout: Ctx["logout"] = () => setState((s) => ({ ...s, loggedIn: false }));
 
   const earnPoints: Ctx["earnPoints"] = ({ gameId, points, title }) => {
+    setState((s0) => {
+      const s = ensureMissionDay(s0);
+      return {
+        ...s,
+        points: s.points + points,
+        mPoints: points > 0 ? s.mPoints + points : s.mPoints,
+        cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
+        // don't record a history entry when nothing was earned
+        txns: points !== 0 ? [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
+      };
+    });
+  };
+
+  const chancesFor: Ctx["chancesFor"] = (gameId) => state.chances[gameId] ?? 0;
+  const chancesPerAd: Ctx["chancesPerAd"] = (gameId) => state.chancesPerAd[gameId] ?? 3;
+
+  const consumeChance: Ctx["consumeChance"] = (gameId) =>
+    setState((s0) => {
+      const s = ensureMissionDay(s0);
+      return {
+        ...s,
+        chances: { ...s.chances, [gameId]: Math.max(0, (s.chances[gameId] ?? 0) - 1) },
+        mGames: s.mGames + 1,
+      };
+    });
+
+  const addChances: Ctx["addChances"] = (gameId) =>
     setState((s) => ({
       ...s,
-      points: s.points + points,
-      cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
-      // don't record a history entry when nothing was earned
-      txns: points !== 0 ? [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
+      chances: { ...s.chances, [gameId]: (s.chances[gameId] ?? 0) + (s.chancesPerAd[gameId] ?? 3) },
     }));
+
+  const setChancesPerAd: Ctx["setChancesPerAd"] = (gameId, n) =>
+    setState((s) => ({ ...s, chancesPerAd: { ...s.chancesPerAd, [gameId]: n } }));
+
+  const getMissions: Ctx["getMissions"] = () => {
+    const s = state.missionDate === todayKey() ? state : { mGames: 0, mPoints: 0, mCheckin: false };
+    const defs = [
+      { id: "play", icon: "gamepad-variant", label: "Play 3 games", current: Math.min(s.mGames, 3), target: 3 },
+      { id: "earn", icon: "star-four-points", label: "Earn 300 points", current: Math.min(s.mPoints, 300), target: 300 },
+      { id: "checkin", icon: "gift", label: "Complete daily check-in", current: s.mCheckin ? 1 : 0, target: 1 },
+    ];
+    return defs.map((d) => ({ ...d, done: d.current >= d.target }));
   };
 
   const claimDailyCheckin: Ctx["claimDailyCheckin"] = () => {
     if (!canClaimCheckin(state)) return null;
     const day = nextCheckinDay(state);
     const reward = CHECKIN_REWARDS[day - 1];
-    setState((s) => ({
-      ...s,
-      points: s.points + reward,
-      checkin: { lastClaim: todayKey(), streak: day },
-      txns: [{ id: uid(), kind: "earn", title: `Daily check-in · Day ${day}`, points: reward, ts: Date.now() }, ...s.txns],
-    }));
+    setState((s0) => {
+      const s = ensureMissionDay(s0);
+      return {
+        ...s,
+        points: s.points + reward,
+        mPoints: s.mPoints + reward,
+        mCheckin: true,
+        checkin: { lastClaim: todayKey(), streak: day },
+        txns: [{ id: uid(), kind: "earn", title: `Daily check-in · Day ${day}`, points: reward, ts: Date.now() }, ...s.txns],
+      };
+    });
     return { reward, day };
   };
 
@@ -369,6 +435,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     login,
     logout,
     earnPoints,
+    chancesFor,
+    consumeChance,
+    addChances,
+    chancesPerAd,
+    setChancesPerAd,
+    getMissions,
     claimDailyCheckin,
     requestPayout,
     canPlay,

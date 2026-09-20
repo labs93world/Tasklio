@@ -6,7 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { ScreenHeader } from "@/src/components/screen-header";
 import { Icon } from "@/src/components/icon";
 import { GameResult } from "@/src/components/game-result";
-import { useApp } from "@/src/store/app-store";
+import { ChancesBadge, GetChancesModal } from "@/src/components/chances";
+import { useGameSession } from "@/src/hooks/use-game-session";
 import { makeStyles, useTheme } from "@/src/theme";
 
 type Cell = "X" | "O" | null;
@@ -29,21 +30,22 @@ export default function TicTacToe() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const { colors } = useTheme();
-  const { earnPoints } = useApp();
+  const S = useGameSession("ttt", "Tic Tac Toe");
 
   const [board, setBoard] = useState<Cell[]>(Array(9).fill(null));
-  const [result, setResult] = useState<{ points: number; title: string; sub: string } | null>(null);
+  const [started, setStarted] = useState(false);
 
   const end = (w: Cell | "draw") => {
     const points = w === "X" ? 100 : w === "draw" ? 30 : 0;
     const title = w === "X" ? "You win!" : w === "draw" ? "It's a draw" : "You lost";
     const sub = w === "X" ? "You beat the app" : w === "draw" ? "Nobody won this round" : "The app got there first";
-    earnPoints({ gameId: "ttt", points, title: "Tic Tac Toe" });
-    setResult({ points, title, sub });
+    setStarted(false);
+    S.finishRound(points, title, sub);
   };
 
   const play = (i: number) => {
-    if (board[i] || result) return;
+    if (board[i] || S.result) return;
+    if (!started) { if (!S.startRound()) return; setStarted(true); }
     const b = [...board];
     b[i] = "X";
     let w = winner(b);
@@ -55,12 +57,12 @@ export default function TicTacToe() {
     if (w) end(w);
   };
 
-  const reset = () => { setBoard(Array(9).fill(null)); setResult(null); };
+  const reset = () => { setBoard(Array(9).fill(null)); setStarted(false); };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <ScreenHeader title="Tic Tac Toe" />
+      <ScreenHeader title="Tic Tac Toe" right={<ChancesBadge gameId="ttt" onGetChances={() => S.setGetModal(true)} />} />
       <View style={[styles.body, { paddingBottom: insets.bottom + 24 }]}>
         <Text style={styles.blurb}>You are X. Beat the app to win 100 points!</Text>
         <View style={styles.board}>
@@ -73,7 +75,8 @@ export default function TicTacToe() {
         <Pressable style={styles.reset} onPress={reset} testID="ttt-reset"><Text style={styles.resetText}>Restart</Text></Pressable>
       </View>
 
-      <GameResult visible={!!result} title={result?.title ?? ""} subtitle={result?.sub ?? ""} points={result?.points ?? 0} onPlayAgain={reset} />
+      <GameResult visible={!!S.result} title={S.result?.title ?? ""} subtitle={S.result?.subtitle ?? ""} points={S.result?.points ?? 0} onClaim={() => { S.claim(); reset(); }} />
+      <GetChancesModal visible={S.getModal} gameId="ttt" onClose={() => S.setGetModal(false)} />
     </View>
   );
 }

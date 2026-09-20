@@ -99,3 +99,19 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - deployment_agent final re-check: status WARN, note "No build-blocking Expo/FastAPI/Mongo deployment issues were confirmed." checks: compilation_passed=true, expo_release_build_ok=true, expo_backend_reachable=true, dockerignore_blocks_required_files=false, stack_supported=true, db_name_from_env=true. Lint clean.
 - Remaining findings are WARN/INFO only (NOT deploy blockers), inherent to the offline-admin design: client-bundled ACCESS_KEY (drawer-menu), default adminPin "1234" (app-store), mock demo passwords in admin-mock.ts, push-notification UI is in-app only (no FCM), and no self-service delete-account flow (Apple review advisory). Left intact to preserve the user's offline admin feature; flagged for the user.
 - App is DEPLOYMENT-READY for Emergent Publish.
+
+## Session Log (2026-09-20, iteration 10) — 11-item UX overhaul + AdMob
+- Popups no longer bounce: replaced `.springify()` with duration-based entrances in game-result, drawer panel + thanks dialog, get-chances modal.
+- Header (home): smaller auto-size greeting/subtitle, bigger gap to right cluster, smaller points badge + smaller bell now in a matching surfaceTertiary card.
+- Home banners use AutoText (title 1 line, body 2 lines). Notifications screen compacted + auto-size single-line titles.
+- Wallet: compact balance card (label+pts tight, wallet icon vertically centered on the right), smaller chips/UPI field/Request button, AutoText; tapping "Got it" after a payout plays a rewarded ad (spinner) then switches to Payout history.
+- Games reward popup: removed "Back to home"; single "Claim" button; reward granted only AFTER Claim (plays rewarded ad via GameResult).
+- Chances system: per-game chances in store (`chances`, `chancesPerAd`, default 3/3). New `ChancesBadge` (header right, "Chances N" auto-size) + `GetChancesModal` (watch ad → +N chances). New `useGameSession(gameId)` hook centralizes gate + claim. All 9 games wired (spin/whack/mine/puzzle/ttt/hilo/n2048 first-action gate; quiz/math explicit Start gate).
+- Daily check-in reward now granted after Claim (rewarded ad) via GameResult.
+- Home: new Daily Missions strip (3 missions with progress bars: Play 3 games / Earn 300 pts / Complete check-in) tracked in store, reset daily.
+- Account popup: FIXED keyboard-dismiss-after-1-char (moved `Field` to module scope), per-field red error labels on submit, haptics on tap, ~1s loading spinner before create/login, compact no-scroll layout.
+- AdMob: `react-native-google-mobile-ads` installed + config plugin in app.json with Google TEST app IDs (android + ios). `src/ads/index.ts` (native, lazy-require + TestIds.REWARDED) and `src/ads/index.web.ts` (simulated). Falls back to simulated ad in Expo Go/web so all flows work; real test ads only in a native build. initAds() called in _layout.
+- Admin (UI-only): removed Dashboard "Overview" card; Banner/Notification controls moved under the 3 dashboard stat cards; removed "LiveCtrl" manage tab; added "Chances" config sub-tab (between Reward & Wallet) wired to store `setChancesPerAd`.
+- New shared: `src/components/auto-text.tsx` (adjustsFontSizeToFit wrapper).
+- testing_agent iteration: all 15 acceptance points PASS (incl. keyboard fix). Fixed 2 flagged nits: confirm-field empty errors in create mode; try/finally around GetChances ad.
+- NOTE: rewarded-ad features require a native APK/IPA build to show real ads (Expo Go/web simulate them).
