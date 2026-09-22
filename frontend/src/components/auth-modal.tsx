@@ -59,16 +59,15 @@ export function AuthModal({ visible }: { visible: boolean }) {
       return;
     }
     setLoading(true);
-    // brief loading so the action feels deliberate before creating/logging in
-    setTimeout(() => {
+    (async () => {
       const res =
         mode === "create"
-          ? createAccount({ name, mobile, confirmMobile, password, confirmPassword })
-          : login({ mobile, password });
+          ? await createAccount({ name, mobile, confirmMobile, password, confirmPassword })
+          : await login({ mobile, password });
       setLoading(false);
       showToast(res.msg, res.ok ? "success" : "error");
       if (!res.ok) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-    }, 1000);
+    })();
   };
 
   const forgot = () => {

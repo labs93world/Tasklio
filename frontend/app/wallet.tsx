@@ -42,8 +42,8 @@ export default function Wallet() {
   const rupees = selected / 100;
   const canRequest = state.points >= selected && /^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi);
 
-  const onRequest = () => {
-    const res = requestPayout(rupees, upi.trim());
+  const onRequest = async () => {
+    const res = await requestPayout(rupees, upi.trim());
     if (res.ok) {
       setUpi("");
       setThanks(true);

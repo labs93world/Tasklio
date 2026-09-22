@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, Share, Text, TextInput, View, Linking } from "react-native";
+import { Modal, Pressable, ScrollView, Share, Text, TextInput, View, Linking, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut, ZoomIn } from "react-native-reanimated";
@@ -7,12 +7,11 @@ import Animated, { SlideInLeft, SlideOutLeft, FadeIn, FadeOut, ZoomIn } from "re
 import { Icon } from "@/src/components/icon";
 import { useApp } from "@/src/store/app-store";
 import { useToast } from "@/src/components/toast";
-import { SHARE_MESSAGE, PLAY_STORE_URL, COMMUNITY_URL, HELP_MAILTO } from "@/src/constants/links";
+import { api, setAdminToken } from "@/src/api/client";
+import { SHARE_MESSAGE } from "@/src/constants/links";
 import { makeStyles, useTheme } from "@/src/theme";
 
 type Props = { visible: boolean; onClose: () => void };
-
-const ACCESS_KEY = "9372@Altaf93Tasklio";
 
 export function DrawerMenu({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
@@ -25,6 +24,7 @@ export function DrawerMenu({ visible, onClose }: Props) {
   const [keyModal, setKeyModal] = useState(false);
   const [thanksModal, setThanksModal] = useState(false);
   const [accessKey, setAccessKey] = useState("");
+  const [checking, setChecking] = useState(false);
   const lastTap = useRef(0);
 
   const go = (path: string) => {
@@ -44,6 +44,13 @@ export function DrawerMenu({ visible, onClose }: Props) {
     setTimeout(() => Share.share({ message: SHARE_MESSAGE }).catch(() => {}), 220);
   };
 
+  // Handle an admin-configured slide-menu item by its url/route shape.
+  const onMenuItem = (url: string, label: string) => {
+    if (!url || url === "app://share") return onShare();
+    if (url.startsWith("/")) return go(url);
+    return openUrl(url, label);
+  };
+
   // Restricted area opens only on a double tap, then asks for the access key.
   const onRestrictedPress = () => {
     const now = Date.now();
@@ -56,26 +63,31 @@ export function DrawerMenu({ visible, onClose }: Props) {
     }
   };
 
-  const submitKey = () => {
+  // The access key is verified SERVER-SIDE (never bundled in the app). A valid
+  // key returns an admin-scoped token which unlocks the admin panel.
+  const submitKey = async () => {
     const val = accessKey.trim();
-    setKeyModal(false);
-    setAccessKey("");
-    if (val === ACCESS_KEY) {
+    if (!val || checking) return;
+    setChecking(true);
+    try {
+      const data = await api<{ token: string }>("/auth/admin-token", { method: "POST", auth: false, body: { admin_key: val } });
+      await setAdminToken(data.token);
+      setChecking(false);
+      setKeyModal(false);
+      setAccessKey("");
       onClose();
       setTimeout(() => router.push("/admin" as any), 220);
-    } else {
+    } catch {
+      setChecking(false);
+      setKeyModal(false);
+      setAccessKey("");
       setThanksModal(true);
     }
   };
 
-  const items = [
-    { icon: "share-variant", label: "Share", onPress: onShare },
-    { icon: "star-outline", label: "Rate us", onPress: () => openUrl(PLAY_STORE_URL, "Play Store") },
-    { icon: "account-group", label: "Join Community", onPress: () => openUrl(COMMUNITY_URL, "Community") },
-    { icon: "face-agent", label: "Help & Support", onPress: () => openUrl(HELP_MAILTO, "Email") },
-    { icon: "file-document-outline", label: "Terms of use", onPress: () => go("/legal/terms") },
-    { icon: "shield-check-outline", label: "Privacy Policy", onPress: () => go("/legal/privacy") },
-  ];
+  const menu = state.config.slideMenu?.length
+    ? state.config.slideMenu.map((m) => ({ icon: m.icon, label: m.label, onPress: () => onMenuItem(m.url, m.label) }))
+    : [{ icon: "share-variant", label: "Share", onPress: onShare }];
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -113,7 +125,7 @@ export function DrawerMenu({ visible, onClose }: Props) {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }} style={{ flex: 1 }}>
           <View style={{ gap: 2 }}>
-            {items.map((it) => (
+            {menu.map((it) => (
               <Pressable key={it.label} style={styles.row} onPress={it.onPress} testID={`drawer-${it.label.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
                 <Icon name={it.icon} size={20} color={colors.onSurfaceSecondary} />
                 <Text style={styles.rowLabel}>{it.label}</Text>
@@ -149,8 +161,8 @@ export function DrawerMenu({ visible, onClose }: Props) {
               autoCorrect={false}
               testID="access-key-input"
             />
-            <Pressable style={styles.dialogBtn} onPress={submitKey} testID="access-key-submit">
-              <Text style={styles.dialogBtnText}>Continue</Text>
+            <Pressable style={styles.dialogBtn} onPress={submitKey} disabled={checking} testID="access-key-submit">
+              {checking ? <ActivityIndicator color={colors.onBrand} /> : <Text style={styles.dialogBtnText}>Continue</Text>}
             </Pressable>
           </Pressable>
         </Pressable>

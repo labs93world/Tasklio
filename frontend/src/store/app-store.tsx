@@ -1,96 +1,58 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
-import * as DocumentPicker from "expo-document-picker";
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 
+import { api, setToken, clearToken, getToken } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
-import { uid } from "@/src/utils/format";
 import { POINTS_PER_RUPEE, GAMES } from "@/src/constants/games";
 
-const STATE_KEY = "tasklio_state_v3";
-const BACKUP_FILE = FileSystem.documentDirectory + "tasklio_backup.json";
+const ACCOUNT_KEY = "tasklio_account_v1";
 
 export type PayoutStatus = "pending" | "successful" | "failed";
+export type Txn = { id: string; kind: "earn" | "payout" | "adjust"; title: string; points: number; ts: number };
+export type Notif = { id: string; icon: string; tintKey: string; title: string; body: string; ts: number; read: boolean; pinned?: boolean };
+export type Payout = { id: string; amountRupees: number; upi: string; status: PayoutStatus; ts: number; reason?: string };
 
-export type Txn = {
-  id: string;
-  kind: "earn" | "payout" | "adjust";
-  title: string;
-  points: number;
-  ts: number;
+export type AppConfig = {
+  checkinRewards: number[];
+  chancesPerAd: Record<string, number>;
+  gameMaxReward: Record<string, number>;
+  pointsPerRupee: number;
+  chips: number[];
+  banners: { title: string; body: string; icon: string; tint: string; route: string; enabled: boolean }[];
+  maintenance: { global: boolean; screens: Record<string, boolean> };
+  forceUpdate: { enabled: boolean; minVersion: string; message: string };
+  slideMenu: { icon: string; label: string; url: string }[];
 };
-
-export type Notif = {
-  id: string;
-  icon: string;
-  tintKey: string;
-  title: string;
-  body: string;
-  ts: number;
-  read: boolean;
-  pinned?: boolean;
-};
-
-export type Payout = {
-  id: string;
-  amountRupees: number;
-  upi: string;
-  status: PayoutStatus;
-  ts: number;
-};
-
-export type Account = { name: string; mobile: string; passwordHash: string };
 
 export type AppState = {
   profile: { name: string; mobile: string };
-  account: Account | null;
+  account: { name: string; mobile: string } | null;
   loggedIn: boolean;
   points: number;
   txns: Txn[];
   notifs: Notif[];
   payouts: Payout[];
   cooldowns: Record<string, number>;
-  adminPin: string;
-  lastDailyReminder: string; // yyyy-mm-dd
-  checkin: { lastClaim: string; streak: number }; // yyyy-mm-dd + current day 1-7
-  chances: Record<string, number>; // per-game remaining chances
-  chancesPerAd: Record<string, number>; // per-game chances granted per rewarded ad
-  // Daily missions (reset each calendar day)
-  missionDate: string;
-  mGames: number;
-  mPoints: number;
-  mCheckin: boolean;
+  checkin: { lastClaim: string; streak: number };
+  chances: Record<string, number>;
+  missions: { date: string; games: number; points: number; checkin: boolean };
+  config: AppConfig;
 };
 
-// Daily check-in rewards grow across a 7-day streak, then cycle back to day 1.
 export const CHECKIN_REWARDS = [10, 20, 35, 50, 75, 100, 150];
 
-function simpleHash(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-  return h.toString(16);
-}
-
-export function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function yesterdayKey(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-// The day (1-7) that will be claimed next given the current streak state.
-export function nextCheckinDay(s: AppState): number {
-  if (s.checkin.lastClaim === yesterdayKey()) return (s.checkin.streak % 7) + 1;
-  return 1;
-}
-
-export function canClaimCheckin(s: AppState): boolean {
-  return s.loggedIn && s.checkin.lastClaim !== todayKey();
-}
+const DEFAULT_CONFIG: AppConfig = {
+  checkinRewards: CHECKIN_REWARDS,
+  chancesPerAd: Object.fromEntries(GAMES.map((g) => [g.id, 3])),
+  gameMaxReward: Object.fromEntries(GAMES.map((g) => [g.id, 500])),
+  pointsPerRupee: POINTS_PER_RUPEE,
+  chips: [100, 500, 1000],
+  banners: [],
+  maintenance: { global: false, screens: {} },
+  forceUpdate: { enabled: false, minVersion: "1.0.0", message: "" },
+  slideMenu: [],
+};
 
 function seedState(): AppState {
   return {
@@ -102,82 +64,70 @@ function seedState(): AppState {
     notifs: [],
     payouts: [],
     cooldowns: {},
-    adminPin: "1234",
-    lastDailyReminder: "",
     checkin: { lastClaim: "", streak: 0 },
     chances: Object.fromEntries(GAMES.map((g) => [g.id, 3])),
-    chancesPerAd: Object.fromEntries(GAMES.map((g) => [g.id, 3])),
-    missionDate: todayKey(),
-    mGames: 0,
-    mPoints: 0,
-    mCheckin: false,
+    missions: { date: "", games: 0, points: 0, checkin: false },
+    config: DEFAULT_CONFIG,
   };
 }
 
-// Reset daily-mission counters when the calendar day changes.
-function ensureMissionDay(s: AppState): AppState {
-  if (s.missionDate === todayKey()) return s;
-  return { ...s, missionDate: todayKey(), mGames: 0, mPoints: 0, mCheckin: false };
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
-
-// Add the 5am "Daily rewards are live" reminder once per day (offline, on open).
-function withDailyReminder(s: AppState): AppState {
-  if (!s.loggedIn) return s;
-  const now = new Date();
-  const fiveAm = new Date();
-  fiveAm.setHours(5, 0, 0, 0);
-  if (now < fiveAm) return s;
-  if (s.lastDailyReminder === todayKey()) return s;
-  return {
-    ...s,
-    lastDailyReminder: todayKey(),
-    notifs: [
-      {
-        id: uid(),
-        icon: "gift",
-        tintKey: "accentSpin",
-        title: "Daily rewards are live",
-        body: "Come every day for bonus points.",
-        ts: Date.now(),
-        read: false,
-      },
-      ...s.notifs,
-    ],
-  };
+function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+export function nextCheckinDay(s: AppState): number {
+  if (s.checkin.lastClaim === yesterdayKey()) return (s.checkin.streak % 7) + 1;
+  return 1;
+}
+export function canClaimCheckin(s: AppState): boolean {
+  return s.loggedIn && s.checkin.lastClaim !== todayKey();
 }
 
 type AuthResult = { ok: boolean; msg: string };
 
+// Server full_state → local AppState (merged onto current so config always present).
+function reconcile(prev: AppState, data: any): AppState {
+  const u = data.user ?? {};
+  return {
+    ...prev,
+    profile: { name: u.name ?? prev.profile.name, mobile: u.mobile ?? prev.profile.mobile },
+    account: u.mobile ? { name: u.name, mobile: u.mobile } : prev.account,
+    loggedIn: true,
+    points: u.points ?? 0,
+    txns: data.txns ?? [],
+    notifs: data.notifs ?? [],
+    payouts: data.payouts ?? [],
+    checkin: u.checkin ?? { lastClaim: "", streak: 0 },
+    chances: u.chances ?? prev.chances,
+    missions: u.missions ?? prev.missions,
+    config: data.config ? { ...DEFAULT_CONFIG, ...data.config } : prev.config,
+  };
+}
+
 type Ctx = {
   ready: boolean;
   state: AppState;
-  // auth
-  createAccount: (d: { name: string; mobile: string; confirmMobile: string; password: string; confirmPassword: string }) => AuthResult;
-  login: (d: { mobile: string; password: string }) => AuthResult;
+  createAccount: (d: { name: string; mobile: string; confirmMobile: string; password: string; confirmPassword: string }) => Promise<AuthResult>;
+  login: (d: { mobile: string; password: string }) => Promise<AuthResult>;
   logout: () => void;
-  // gameplay
+  refresh: () => Promise<void>;
   earnPoints: (opts: { gameId?: string; points: number; title: string }) => void;
   chancesFor: (gameId: string) => number;
   consumeChance: (gameId: string) => void;
   addChances: (gameId: string) => void;
   chancesPerAd: (gameId: string) => number;
-  setChancesPerAd: (gameId: string, n: number) => void;
   getMissions: () => { id: string; icon: string; label: string; current: number; target: number; done: boolean }[];
   claimDailyCheckin: () => { reward: number; day: number } | null;
-  requestPayout: (amountRupees: number, upi: string) => AuthResult;
+  requestPayout: (amountRupees: number, upi: string) => Promise<AuthResult>;
   canPlay: (gameId: string, cooldownMs: number) => { ok: boolean; remainingMs: number };
-  // notifications
   markAllRead: () => void;
   markNotifRead: (id: string) => void;
-  addCustomNotification: (d: { title: string; body: string }) => void;
-  // admin
-  adminAdjust: (delta: number, note: string) => void;
-  setPayoutStatus: (id: string, status: PayoutStatus) => void;
   setProfile: (p: { name: string; mobile: string }) => void;
-  setAdminPin: (pin: string) => void;
-  resetAll: () => void;
-  exportBackup: () => Promise<string>;
-  importBackup: () => Promise<AuthResult>;
 };
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -188,143 +138,170 @@ export function useApp(): Ctx {
   return ctx;
 }
 
+async function registerPush(userId: string) {
+  if (Platform.OS === "web") return;
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") return;
+    const tok = await Notifications.getDevicePushTokenAsync();
+    await api("/register-push", { method: "POST", auth: false, body: { user_id: userId, platform: Platform.OS, device_token: String(tok.data) } });
+  } catch {
+    // non-blocking
+  }
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [state, setState] = useState<AppState>(seedState);
-  const loaded = useRef(false);
+  const userIdRef = useRef<string>("");
 
+  // Load public config first (so banners/menu render even logged-out), then
+  // hydrate the session from a stored token if present.
   useEffect(() => {
     (async () => {
-      const raw = await storage.getItem(STATE_KEY, "");
-      let next: AppState | null = null;
-      if (raw && typeof raw === "string") {
+      const acct = await storage.getItem<{ name: string; mobile: string } | null>(ACCOUNT_KEY, null);
+      try {
+        const cfg = await api<AppConfig>("/config", { auth: false });
+        setState((s) => ({ ...s, config: { ...DEFAULT_CONFIG, ...cfg }, account: acct ?? s.account }));
+      } catch {
+        if (acct) setState((s) => ({ ...s, account: acct }));
+      }
+      const token = await getToken();
+      if (token) {
         try {
-          next = JSON.parse(raw) as AppState;
+          const data = await api("/me");
+          userIdRef.current = data.user?.id ?? "";
+          setState((s) => reconcile(s, data));
+          if (userIdRef.current) registerPush(userIdRef.current);
         } catch {
-          next = null;
+          await clearToken();
         }
       }
-      if (!next) {
-        try {
-          const info = await FileSystem.getInfoAsync(BACKUP_FILE);
-          if (info.exists) {
-            next = JSON.parse(await FileSystem.readAsStringAsync(BACKUP_FILE)) as AppState;
-          }
-        } catch {
-          next = null;
-        }
-      }
-      const merged = next ? { ...seedState(), ...next } : seedState();
-      setState(withDailyReminder(merged));
-      loaded.current = true;
       setReady(true);
     })();
   }, []);
 
-  useEffect(() => {
-    if (!loaded.current) return;
-    const json = JSON.stringify(state);
-    storage.setItem(STATE_KEY, json);
-    FileSystem.writeAsStringAsync(BACKUP_FILE, json).catch(() => {});
-  }, [state]);
+  const applyAuth = async (data: any) => {
+    if (data.token) await setToken(data.token);
+    userIdRef.current = data.user?.id ?? "";
+    const acct = data.user?.mobile ? { name: data.user.name, mobile: data.user.mobile } : null;
+    if (acct) await storage.setItem(ACCOUNT_KEY, acct);
+    setState((s) => reconcile(s, data));
+    if (userIdRef.current) registerPush(userIdRef.current);
+  };
 
-  const createAccount: Ctx["createAccount"] = ({ name, mobile, confirmMobile, password, confirmPassword }) => {
+  const createAccount: Ctx["createAccount"] = async ({ name, mobile, confirmMobile, password, confirmPassword }) => {
     if (!name.trim()) return { ok: false, msg: "Please enter your name." };
     if (!/^\d{10}$/.test(mobile)) return { ok: false, msg: "Enter a valid 10-digit mobile number." };
     if (mobile !== confirmMobile) return { ok: false, msg: "Mobile numbers do not match." };
     if (password.length < 4) return { ok: false, msg: "Password must be at least 4 characters." };
     if (password !== confirmPassword) return { ok: false, msg: "Passwords do not match." };
-    const account: Account = { name: name.trim(), mobile, passwordHash: simpleHash(password) };
-    setState((s) => ({ ...s, account, loggedIn: true, profile: { name: account.name, mobile } }));
-    return { ok: true, msg: `Welcome, ${account.name}!` };
-  };
-
-  const login: Ctx["login"] = ({ mobile, password }) => {
-    if (!state.account) return { ok: false, msg: "No account found. Please create one." };
-    if (state.account.mobile !== mobile || state.account.passwordHash !== simpleHash(password)) {
-      return { ok: false, msg: "Incorrect mobile number or password." };
+    try {
+      const data = await api("/auth/register", { method: "POST", auth: false, body: { name: name.trim(), mobile, password } });
+      await applyAuth(data);
+      return { ok: true, msg: `Welcome, ${data.user.name}!` };
+    } catch (e: any) {
+      return { ok: false, msg: e?.message || "Could not create account." };
     }
-    setState((s) => ({ ...s, loggedIn: true, profile: { name: s.account!.name, mobile } }));
-    return { ok: true, msg: `Welcome back, ${state.account.name}!` };
   };
 
-  const logout: Ctx["logout"] = () => setState((s) => ({ ...s, loggedIn: false }));
+  const login: Ctx["login"] = async ({ mobile, password }) => {
+    if (!/^\d{10}$/.test(mobile)) return { ok: false, msg: "Enter a valid 10-digit mobile number." };
+    try {
+      const data = await api("/auth/login", { method: "POST", auth: false, body: { mobile, password } });
+      await applyAuth(data);
+      return { ok: true, msg: `Welcome back, ${data.user.name}!` };
+    } catch (e: any) {
+      return { ok: false, msg: e?.message || "Incorrect mobile number or password." };
+    }
+  };
+
+  const logout: Ctx["logout"] = () => {
+    clearToken();
+    userIdRef.current = "";
+    setState((s) => ({ ...seedState(), config: s.config, account: s.account }));
+  };
+
+  const refresh: Ctx["refresh"] = async () => {
+    if (!(await getToken())) return;
+    try {
+      const data = await api("/me");
+      setState((s) => reconcile(s, data));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Mutations: optimistic local update + server sync (reconcile on response).
+  const sync = async (path: string, body?: unknown) => {
+    try {
+      const data = await api(path, { method: "POST", body });
+      setState((s) => reconcile(s, data));
+    } catch {
+      refresh();
+    }
+  };
 
   const earnPoints: Ctx["earnPoints"] = ({ gameId, points, title }) => {
-    setState((s0) => {
-      const s = ensureMissionDay(s0);
-      return {
-        ...s,
-        points: s.points + points,
-        mPoints: points > 0 ? s.mPoints + points : s.mPoints,
-        cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
-        // don't record a history entry when nothing was earned
-        txns: points !== 0 ? [{ id: uid(), kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
-      };
-    });
+    setState((s) => ({
+      ...s,
+      points: s.points + points,
+      cooldowns: gameId ? { ...s.cooldowns, [gameId]: Date.now() } : s.cooldowns,
+      txns: points !== 0 ? [{ id: `tmp-${Date.now()}`, kind: "earn", title, points, ts: Date.now() }, ...s.txns] : s.txns,
+    }));
+    sync("/earn", { gameId, points, title });
   };
 
   const chancesFor: Ctx["chancesFor"] = (gameId) => state.chances[gameId] ?? 0;
-  const chancesPerAd: Ctx["chancesPerAd"] = (gameId) => state.chancesPerAd[gameId] ?? 3;
+  const chancesPerAd: Ctx["chancesPerAd"] = (gameId) => state.config.chancesPerAd[gameId] ?? 3;
 
-  const consumeChance: Ctx["consumeChance"] = (gameId) =>
-    setState((s0) => {
-      const s = ensureMissionDay(s0);
-      return {
-        ...s,
-        chances: { ...s.chances, [gameId]: Math.max(0, (s.chances[gameId] ?? 0) - 1) },
-        mGames: s.mGames + 1,
-      };
-    });
-
-  const addChances: Ctx["addChances"] = (gameId) =>
+  const consumeChance: Ctx["consumeChance"] = (gameId) => {
     setState((s) => ({
       ...s,
-      chances: { ...s.chances, [gameId]: (s.chances[gameId] ?? 0) + (s.chancesPerAd[gameId] ?? 3) },
+      chances: { ...s.chances, [gameId]: Math.max(0, (s.chances[gameId] ?? 0) - 1) },
+      missions: { ...s.missions, games: s.missions.games + 1 },
     }));
+    sync("/chances/consume", { gameId });
+  };
 
-  const setChancesPerAd: Ctx["setChancesPerAd"] = (gameId, n) =>
-    setState((s) => ({ ...s, chancesPerAd: { ...s.chancesPerAd, [gameId]: n } }));
+  const addChances: Ctx["addChances"] = (gameId) => {
+    const per = chancesPerAd(gameId);
+    setState((s) => ({ ...s, chances: { ...s.chances, [gameId]: (s.chances[gameId] ?? 0) + per } }));
+    sync("/chances/add", { gameId });
+  };
 
   const getMissions: Ctx["getMissions"] = () => {
-    const s = state.missionDate === todayKey() ? state : { mGames: 0, mPoints: 0, mCheckin: false };
-    const defs = [
-      { id: "play", icon: "gamepad-variant", label: "Play 3 games", current: Math.min(s.mGames, 3), target: 3 },
-      { id: "earn", icon: "star-four-points", label: "Earn 300 points", current: Math.min(s.mPoints, 300), target: 300 },
-      { id: "checkin", icon: "gift", label: "Complete daily check-in", current: s.mCheckin ? 1 : 0, target: 1 },
-    ];
-    return defs.map((d) => ({ ...d, done: d.current >= d.target }));
+    const m = state.missions.date === todayKey() ? state.missions : { games: 0, points: 0, checkin: false };
+    return [
+      { id: "play", icon: "gamepad-variant", label: "Play 3 games", current: Math.min(m.games, 3), target: 3 },
+      { id: "earn", icon: "star-four-points", label: "Earn 300 points", current: Math.min(m.points, 300), target: 300 },
+      { id: "checkin", icon: "gift", label: "Complete daily check-in", current: m.checkin ? 1 : 0, target: 1 },
+    ].map((d) => ({ ...d, done: d.current >= d.target }));
   };
 
   const claimDailyCheckin: Ctx["claimDailyCheckin"] = () => {
     if (!canClaimCheckin(state)) return null;
     const day = nextCheckinDay(state);
-    const reward = CHECKIN_REWARDS[day - 1];
-    setState((s0) => {
-      const s = ensureMissionDay(s0);
-      return {
-        ...s,
-        points: s.points + reward,
-        mPoints: s.mPoints + reward,
-        mCheckin: true,
-        checkin: { lastClaim: todayKey(), streak: day },
-        txns: [{ id: uid(), kind: "earn", title: `Daily check-in · Day ${day}`, points: reward, ts: Date.now() }, ...s.txns],
-      };
-    });
+    const reward = (state.config.checkinRewards ?? CHECKIN_REWARDS)[day - 1];
+    setState((s) => ({
+      ...s,
+      points: s.points + reward,
+      checkin: { lastClaim: todayKey(), streak: day },
+      missions: { ...s.missions, checkin: true, points: s.missions.points + reward },
+    }));
+    sync("/checkin");
     return { reward, day };
   };
 
-  const requestPayout: Ctx["requestPayout"] = (amountRupees, upi) => {
-    const cost = Math.round(amountRupees * POINTS_PER_RUPEE);
+  const requestPayout: Ctx["requestPayout"] = async (amountRupees, upi) => {
     if (!upi || !/^[\w.\-]{2,}@[\w.\-]{2,}$/.test(upi)) return { ok: false, msg: "Enter a valid UPI ID (name@bank)." };
-    if (state.points < cost) return { ok: false, msg: "Not enough points for this payout." };
-    setState((s) => ({
-      ...s,
-      points: s.points - cost,
-      payouts: [{ id: uid(), amountRupees, upi, status: "pending", ts: Date.now() }, ...s.payouts],
-      txns: [{ id: uid(), kind: "payout", title: `Payout to ${upi}`, points: -cost, ts: Date.now() }, ...s.txns],
-    }));
-    return { ok: true, msg: `Payout of ₹${amountRupees.toFixed(2)} requested.` };
+    try {
+      const data = await api("/payout", { method: "POST", body: { amountRupees, upi } });
+      setState((s) => reconcile(s, data));
+      return { ok: true, msg: `Payout of ₹${amountRupees.toFixed(2)} requested.` };
+    } catch (e: any) {
+      return { ok: false, msg: e?.message || "Could not request payout." };
+    }
   };
 
   const canPlay: Ctx["canPlay"] = (gameId, cooldownMs) => {
@@ -334,98 +311,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return { ok: remainingMs <= 0, remainingMs: Math.max(0, remainingMs) };
   };
 
-  const markAllRead: Ctx["markAllRead"] = () =>
+  const markAllRead: Ctx["markAllRead"] = () => {
     setState((s) => ({ ...s, notifs: s.notifs.map((n) => ({ ...n, read: true })) }));
+    sync("/notifications/read-all");
+  };
 
-  const markNotifRead: Ctx["markNotifRead"] = (id) =>
+  const markNotifRead: Ctx["markNotifRead"] = (id) => {
     setState((s) => ({ ...s, notifs: s.notifs.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
-
-  const addCustomNotification: Ctx["addCustomNotification"] = ({ title, body }) =>
-    setState((s) => ({
-      ...s,
-      notifs: [
-        { id: uid(), icon: "bullhorn", tintKey: "accentQuiz", title, body, ts: Date.now(), read: false, pinned: true },
-        ...s.notifs,
-      ],
-    }));
-
-  const adminAdjust: Ctx["adminAdjust"] = (delta, note) =>
-    setState((s) => ({
-      ...s,
-      points: Math.max(0, s.points + delta),
-      txns: [{ id: uid(), kind: "adjust", title: note, points: delta, ts: Date.now() }, ...s.txns],
-    }));
-
-  const setPayoutStatus: Ctx["setPayoutStatus"] = (id, status) => {
-    setState((s) => {
-      const payout = s.payouts.find((p) => p.id === id);
-      const payouts = s.payouts.map((p) => (p.id === id ? { ...p, status } : p));
-      let notifs = s.notifs;
-      if (payout && status === "successful") {
-        notifs = [
-          {
-            id: uid(),
-            icon: "check-decagram",
-            tintKey: "success",
-            title: "Withdrawal successful",
-            body: `₹${payout.amountRupees.toFixed(2)} to ${payout.upi} has been credited.`,
-            ts: Date.now(),
-            read: false,
-          },
-          ...notifs,
-        ];
-      } else if (payout && status === "failed") {
-        notifs = [
-          {
-            id: uid(),
-            icon: "close-octagon",
-            tintKey: "error",
-            title: "Withdrawal rejected",
-            body: `₹${payout.amountRupees.toFixed(2)} to ${payout.upi} was rejected. Points refunded.`,
-            ts: Date.now(),
-            read: false,
-          },
-          ...notifs,
-        ];
-      }
-      // refund points on rejection + record the refund in activity history (guard against double-refund)
-      const refund = payout && status === "failed" && payout.status !== "failed" ? Math.round(payout.amountRupees * POINTS_PER_RUPEE) : 0;
-      const txns =
-        refund > 0
-          ? [{ id: uid(), kind: "payout" as const, title: `Payout rejected · refund for ${payout!.upi}`, points: refund, ts: Date.now() }, ...s.txns]
-          : s.txns;
-      return { ...s, payouts, notifs, points: s.points + refund, txns };
-    });
+    if (!id.startsWith("tmp-")) sync(`/notifications/${id}/read`);
   };
 
-  const setProfile: Ctx["setProfile"] = (profile) =>
-    setState((s) => ({ ...s, profile, account: s.account ? { ...s.account, name: profile.name, mobile: profile.mobile } : s.account }));
-
-  const setAdminPin: Ctx["setAdminPin"] = (pin) => setState((s) => ({ ...s, adminPin: pin }));
-
-  const resetAll: Ctx["resetAll"] = () => setState(seedState());
-
-  const exportBackup: Ctx["exportBackup"] = async () => {
-    const json = JSON.stringify(state, null, 2);
-    const path = FileSystem.cacheDirectory + "tasklio-backup.json";
-    await FileSystem.writeAsStringAsync(path, json);
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, { mimeType: "application/json", dialogTitle: "Save Tasklio backup" });
-    }
-    return path;
-  };
-
-  const importBackup: Ctx["importBackup"] = async () => {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ type: "application/json", copyToCacheDirectory: true });
-      if (res.canceled || !res.assets?.[0]) return { ok: false, msg: "Import cancelled." };
-      const parsed = JSON.parse(await FileSystem.readAsStringAsync(res.assets[0].uri)) as AppState;
-      if (typeof parsed.points !== "number") return { ok: false, msg: "Invalid backup file." };
-      setState({ ...seedState(), ...parsed });
-      return { ok: true, msg: "Backup restored successfully." };
-    } catch {
-      return { ok: false, msg: "Could not read backup file." };
-    }
+  const setProfile: Ctx["setProfile"] = (profile) => {
+    setState((s) => ({ ...s, profile }));
+    sync("/profile", profile);
   };
 
   const value: Ctx = {
@@ -434,26 +332,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     createAccount,
     login,
     logout,
+    refresh,
     earnPoints,
     chancesFor,
     consumeChance,
     addChances,
     chancesPerAd,
-    setChancesPerAd,
     getMissions,
     claimDailyCheckin,
     requestPayout,
     canPlay,
     markAllRead,
     markNotifRead,
-    addCustomNotification,
-    adminAdjust,
-    setPayoutStatus,
     setProfile,
-    setAdminPin,
-    resetAll,
-    exportBackup,
-    importBackup,
   };
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;

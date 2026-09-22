@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "317251128624",
+    "project_id": "tasklio93",
+    "storage_bucket": "tasklio93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:317251128624:android:89c6268a5133221b4b0cf5",
+        "android_client_info": {
+          "package_name": "com.altaftech.tasklio"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDX_dVrIcL7e-UEc6p7vPxPq3cD8O67KrA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -134,7 +134,7 @@ export default function Splash() {
           TASKLIO
         </Animated.Text>
         <Animated.Text style={[styles.tagline, taglineStyle]} testID="splash-tagline">
-          Earn · Track · Grow
+          Play. Earn. Cash out.
         </Animated.Text>
       </View>
 
