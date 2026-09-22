@@ -15,9 +15,13 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
+import asyncio
+import json
+
 import jwt
 import bcrypt
-import httpx
+import firebase_admin
+from firebase_admin import credentials, messaging as fcm
 from bson import ObjectId
 from fastapi import FastAPI, APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -51,27 +55,51 @@ api = APIRouter(prefix="/api")
 bearer = HTTPBearer(auto_error=False)
 
 # ---------------------------------------------------------------------------
-# Push relay (Emergent managed)
+# Push — direct Firebase Cloud Messaging (user's own service account, no relay)
 # ---------------------------------------------------------------------------
-PUSH_BASE_URL = "https://integrations.emergentagent.com"
-PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
-_push = httpx.AsyncClient(base_url=PUSH_BASE_URL, headers={"X-Push-Key": PUSH_KEY}, timeout=10.0)
+device_tokens = db.device_tokens
+
+
+def _init_firebase() -> None:
+    if firebase_admin._apps:
+        return
+    raw = os.environ.get("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if not raw:
+        logger.warning("FIREBASE_SERVICE_ACCOUNT_JSON not set; push sending disabled")
+        return
+    firebase_admin.initialize_app(credentials.Certificate(json.loads(raw)), {"projectId": "tasklio93"})
+    logger.info("Firebase Admin initialized for push")
+
+
+_init_firebase()
 
 
 async def send_push(recipients: list[str], data: dict, idempotency_key: str | None = None) -> None:
+    """Send an FCM notification to every registered device of the given user ids."""
     if not recipients:
         return
-    for i in range(0, len(recipients), 100):
-        chunk = recipients[i : i + 100]
-        payload: dict = {"recipients": chunk, "data": data}
-        if idempotency_key:
-            payload["$idempotency_key"] = f"{idempotency_key}:{i}"
-        resp = await _push.post("/api/v1/push/trigger", json=payload)
-        if resp.status_code == 401:
-            raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
-        if resp.status_code >= 500:
-            raise HTTPException(502, "Push provider unavailable")
-        resp.raise_for_status()
+    if not firebase_admin._apps:
+        raise HTTPException(500, "Push not configured (FIREBASE_SERVICE_ACCOUNT_JSON missing)")
+    docs = await device_tokens.find({"user_id": {"$in": recipients}}).to_list(length=2000)
+    tokens = [d["token"] for d in docs]
+    if not tokens:
+        logger.info(f"send_push: no device tokens registered for {len(recipients)} recipient(s)")
+        return
+    title = str(data.get("title", "Tasklio"))
+    body = str(data.get("message", ""))
+    extra = {str(k): str(v) for k, v in data.items() if k not in ("title", "message")}
+    for i in range(0, len(tokens), 500):
+        chunk = tokens[i : i + 500]
+        msg = fcm.MulticastMessage(
+            tokens=chunk,
+            notification=fcm.Notification(title=title, body=body),
+            data=extra,
+            android=fcm.AndroidConfig(priority="high", notification=fcm.AndroidNotification(channel_id="default")),
+        )
+        resp = await asyncio.to_thread(fcm.send_each_for_multicast, msg)
+        for token, r in zip(chunk, resp.responses):
+            if not r.success and r.exception and "registration-token-not-registered" in str(r.exception):
+                await device_tokens.delete_one({"token": token})
 
 
 # ---------------------------------------------------------------------------
@@ -471,12 +499,11 @@ async def read_one(nid: str, u=Depends(current_user)):
 
 @api.post("/register-push", status_code=201)
 async def register_push(b: RegisterPushBody):
-    resp = await _push.post("/api/v1/push/users/register", json=b.model_dump())
-    if resp.status_code == 401:
-        raise HTTPException(500, "EMERGENT_PUSH_KEY missing or invalid")
-    if resp.status_code >= 500:
-        raise HTTPException(502, "Push provider unavailable")
-    resp.raise_for_status()
+    await device_tokens.update_one(
+        {"user_id": b.user_id, "token": b.device_token},
+        {"$set": {"platform": b.platform}},
+        upsert=True,
+    )
     return {"status": "registered"}
 
 
@@ -675,6 +702,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     await users.create_index("mobile")
+    await device_tokens.create_index([("user_id", 1), ("token", 1)], unique=True)
     await get_config()
     logger.info("Tasklio backend ready (cloud mode)")
 
@@ -682,4 +710,3 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     client.close()
-    await _push.aclose()

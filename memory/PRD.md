@@ -147,3 +147,11 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - Installed: @react-native-community/netinfo (prev), expo-notifications, expo-device.
 - testing_agent iteration_9: backend 26/26 pytest PASS (public URL), frontend 100% (splash tagline, register, admin key → panel with real Mongo counts). No blocking issues.
 - BUILD REQUIRED for push: real device build + service-account JSON uploaded in the build UI (not needed in code). Expo Go/web simulate/skip push.
+
+## Session Log (2026-09-22, iteration 15) — Push switched to user's own Firebase (no Emergent relay)
+- User: "Don't use anything of Emergent." → removed the Emergent managed push relay (SuprSend / EMERGENT_PUSH_KEY) entirely.
+- Now sending FCM DIRECTLY via firebase-admin SDK (v7.6.0) + user's own service account (project tasklio93). Service account stored server-side only as env FIREBASE_SERVICE_ACCOUNT_JSON (single-line JSON in backend/.env) — never in the frontend bundle.
+- backend/server.py: replaced relay send_push with FCM multicast (send_each_for_multicast, chunked 500, auto-deletes unregistered tokens, runs in asyncio.to_thread since Admin SDK is sync). New Mongo collection device_tokens (user_id, token, platform; unique index). /register-push now upserts into device_tokens. Removed _push httpx client + EMERGENT_PUSH_KEY.
+- requirements.txt: + firebase_admin, + httpx (firebase-admin dep). No frontend changes (client register-push call unchanged).
+- Verified: register-push stores token (201, Mongo doc), admin notify → ok:true via real FCM, backend healthy, "Firebase Admin initialized for push".
+- NOTE: native FCM needs a real Android build with google-services.json (already wired) — not Expo Go/web.
