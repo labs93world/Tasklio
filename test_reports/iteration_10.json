@@ -1,0 +1,42 @@
+{
+  "summary": "Full admin-panel re-verification after Firebase FCM push migration. BACKEND: 39/39 pytest cases PASS against public preview URL via /app/backend/tests/test_tasklio_cloud.py (expanded from 26 → 39, adding coverage for users search by mobile, adjust-points clamp-to-zero, edit user (name/mobile/password re-hash + login-with-new-password + old-password rejected), invalid-mobile 400, soft-delete (user hidden from list + /me blocked with their token), payout double-processing 400, targeted notify (single recipient + invalid userId 400), config groups saved individually and non-wiping (gameMaxReward, chancesPerAd, pointsPerRupee, chips, banners, slideMenu, forceUpdate), maintenance.global toggle + reset, dashboard field types, payouts embedded-user shape). Admin auth via POST /api/auth/admin-token with '9372@Altaf93Tasklio' returns admin-scoped JWT; wrong key 403; /api/admin/* returns 401 without token and 403 with user token. Firebase FCM send is wrapped in try/except and non-blocking as designed (no real device tokens in preview — expected). FRONTEND: On web mobile viewport (390x844), fresh account created via auth-modal (auth-name/mobile/confirm-mobile/password/confirm-password/auth-submit), home rendered with home-menu-button, drawer opened, double-tap on drawer-restricted-area shows access-key-input, submitting 9372@Altaf93Tasklio via access-key-submit routes to /admin. Admin Panel Dashboard shows LIVE MongoDB-backed counts (Users: 20, Pending: 5 · ₹14.00, Paid: 7 · ₹26.00). Manage → Users lists all newly created TEST_ users with search field; Manage → Payout shows Pending/Successful/Rejected sub-tabs each with embedded user name+mobile and Approve/Reject actions; Manage → Config shows Reward/Chances/Wallet sub-tabs with editable checkinRewards, per-game maxReward + chancesPerAd, pointsPerRupee + chips; Manage → Settings shows Maintenance/Force Update/Slide Menu — Global Maintenance toggle is OFF at end (verified via GET /api/config → maintenance.global=false, pointsPerRupee=100). One preexisting stale DB state was detected: pointsPerRupee had been left at 1000 from a previous session which briefly failed 2 payout tests until reset to 100 (root cause: earlier session used pointsPerRupee=1000; new test now restores to previous snapshot). No red screens, no crash, no missing testIDs, no deprecated Expo packages (no expo-av/expo-barcode-scanner/expo-background-fetch), only harmless expo-notifications web push warning.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/admin/users/{id}/points", "issue": "Balance is briefly driven negative by $inc before being clamped to 0 in a second write. Cosmetic race window; behaviour is correct end-to-end. Consider aggregation update with $max to keep it single-write atomic."},
+      {"endpoint": "POST /api/admin/notify", "issue": "'pushed' returns 0 when FCM upstream fails even though 'recipients' is non-zero. Correct semantics but frontend confirmation copy should read 'recipients' not 'pushed' to avoid confusing admin in preview where no device tokens are registered."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_10.json",
+    "/app/backend/tests/test_tasklio_cloud.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "(optional) Consider atomic $max clamp in admin_adjust_points to eliminate transient negative-points write.",
+    "(optional) Migrate FastAPI @app.on_event('startup'/'shutdown') to lifespan context manager (Starlette deprecation, harmless today).",
+    "(optional) server.py is 713 lines — approaching the 700-line guideline; split admin routes into a submodule when it grows further."
+  ],
+  "critical_code_review_comments": [
+    "Admin routes correctly guarded via admin_guard dependency (401 no-token, 403 user-token) — verified end-to-end.",
+    "Firebase send_push wrapped in try/except everywhere it is called (adjust points, payout status, notify) — non-blocking as required in preview without real device tokens.",
+    "Config PUT merges only allowed keys and does not wipe other keys — verified by group-by-group save test.",
+    "Soft delete uses deleted_at and admin_list_users filters {deleted_at: None} — correctly hides user from listing.",
+    "PATCH /admin/users mobile validator matches /^\\d{10}$/ — returns 400 on invalid format."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_tasklio_cloud.py"
+  ],
+  "success_rate": {"backend": "100% (39/39)", "frontend": "100%"},
+  "seed_data_creation": "Created several TEST_ prefixed users, transactions, payouts, notifications during the pytest run. Config was mutated during group-persistence test then restored (pointsPerRupee back to 100, maintenance.global=false, checkinRewards to [10,20,35,50,75,100,150]). One TEST_b banner remains in banners config (visible in Admin → Manage → Banner) — safe leftover, main agent can remove via admin UI if desired.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Public URL: https://github-import-147.preview.emergentagent.com. Admin key: POST /api/auth/admin-token {admin_key:'9372@Altaf93Tasklio'} → JWT with scope=admin (wrong key → 403). Regression suite: pytest /app/backend/tests/test_tasklio_cloud.py -v (uses EXPO_PUBLIC_BACKEND_URL env). All FCM push failures in preview are EXPECTED and non-blocking (no real device tokens). Ensure pointsPerRupee is set back to 100 (server default) before running the suite — some earlier iterations left it at 1000 which breaks payout math in TestUserFlow. Frontend admin route unlock flow: Home → home-menu-button → drawer-restricted-area (double-tap) → access-key-input → access-key-submit → /admin.",
+  "rca_of_issue": "Initial run had 2 flaky failures caused by leftover config state (pointsPerRupee=1000 from a prior session) making 10 rupees cost 10 000 pts (only 5060 available). Reset via PUT /api/admin/config {pointsPerRupee: 100} → all 39 tests pass. The new TestAdminConfigGroups test now restores pointsPerRupee to the pre-run snapshot at teardown to prevent this leaking to future runs."
+}

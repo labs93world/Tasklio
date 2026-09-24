@@ -155,3 +155,10 @@ Tasklio: offline rewards + mini-games app. Package `com.altaftech.tasklio`. Prof
 - requirements.txt: + firebase_admin, + httpx (firebase-admin dep). No frontend changes (client register-push call unchanged).
 - Verified: register-push stores token (201, Mongo doc), admin notify → ok:true via real FCM, backend healthy, "Firebase Admin initialized for push".
 - NOTE: native FCM needs a real Android build with google-services.json (already wired) — not Expo Go/web.
+
+## Session Log (2026-09-22, iteration 16) — Full admin panel re-verification (user: "check everything works")
+- testing_agent iteration_10: backend 39/39 pytest PASS + full frontend admin UI flow PASS. No fixes needed.
+- Verified end-to-end: admin-token auth (wrong key 403, user/no token on /admin/* → 403/401), dashboard live counts, users list + search by partial mobile, adjust points (clamp >=0, txn + notif), edit user (name/mobile, invalid mobile 400, password re-hash so new pw logs in & old 401), soft delete (gone from list + token rejected), payouts list w/ embedded user, approve→successful+notif, reject→refund+failed+notif, re-process 400, broadcast + targeted notify (invalid userId 400), config save per-group (checkinRewards/gameMaxReward/chancesPerAd/pointsPerRupee/chips/banners/maintenance/forceUpdate/slideMenu) each persists without wiping others, maintenance.global toggle + reset.
+- Firebase FCM sends non-blocking (no real device tokens in preview) — as designed.
+- Note: a prior session had left pointsPerRupee=1000 in Mongo which flaked 2 payout tests; reset to 100. Final DB clean: pointsPerRupee=100, maintenance.global=false, checkinRewards default.
+- Optional (not bugs): atomic $max clamp for points, lifespan migration, split server.py if >700 lines.

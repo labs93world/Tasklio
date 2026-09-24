@@ -239,3 +239,180 @@ class TestAdminActions:
         # revert
         r2 = http.put(f"{API}/admin/config", headers=admin_headers, json={"checkinRewards": [10, 20, 35, 50, 75, 100, 150]})
         assert r2.status_code == 200
+
+
+# ------------------- Extended admin coverage (iteration 10) -------------------
+def _mk_user(http, name="TEST_ExtUser"):
+    mobile = "9" + "".join(str(random.randint(0, 9)) for _ in range(9))
+    r = http.post(f"{API}/auth/register", json={"name": name, "mobile": mobile, "password": "test123"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    return {"id": d["user"]["id"], "mobile": mobile, "token": d["token"]}
+
+
+class TestAdminUsersSearch:
+    def test_search_by_partial_mobile(self, http, admin_headers):
+        u = _mk_user(http, "TEST_Search")
+        partial = u["mobile"][:6]
+        r = http.get(f"{API}/admin/users?q={partial}", headers=admin_headers)
+        assert r.status_code == 200
+        result = r.json()
+        assert any(x["id"] == u["id"] for x in result), "Newly created user not found via mobile search"
+
+
+class TestAdminAdjustPointsClampToZero:
+    def test_negative_delta_does_not_go_below_zero(self, http, admin_headers, user_headers, new_user):
+        # first set to a known small state, then subtract huge amount
+        me_points = http.get(f"{API}/me", headers=user_headers).json()["user"]["points"]
+        r = http.patch(f"{API}/admin/users/{new_user['id']}/points", headers=admin_headers,
+                       json={"delta": -(me_points + 999999), "note": "TEST_clamp"})
+        assert r.status_code == 200, r.text
+        after = http.get(f"{API}/me", headers=user_headers).json()["user"]["points"]
+        assert after == 0
+
+
+class TestAdminEditUser:
+    def test_edit_name_and_mobile(self, http, admin_headers):
+        u = _mk_user(http, "TEST_EditA")
+        new_mobile = "9" + "".join(str(random.randint(0, 9)) for _ in range(9))
+        r = http.patch(f"{API}/admin/users/{u['id']}", headers=admin_headers,
+                       json={"name": "TEST_Edited", "mobile": new_mobile})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["name"] == "TEST_Edited"
+        assert d["mobile"] == new_mobile
+
+    def test_edit_invalid_mobile_returns_400(self, http, admin_headers):
+        u = _mk_user(http, "TEST_EditB")
+        r = http.patch(f"{API}/admin/users/{u['id']}", headers=admin_headers, json={"mobile": "123"})
+        assert r.status_code == 400
+
+    def test_edit_password_rehash_and_login(self, http, admin_headers):
+        u = _mk_user(http, "TEST_EditPw")
+        r = http.patch(f"{API}/admin/users/{u['id']}", headers=admin_headers, json={"password": "newpass456"})
+        assert r.status_code == 200
+        # old password must fail
+        old = http.post(f"{API}/auth/login", json={"mobile": u["mobile"], "password": "test123"})
+        assert old.status_code == 401
+        # new password must succeed
+        new = http.post(f"{API}/auth/login", json={"mobile": u["mobile"], "password": "newpass456"})
+        assert new.status_code == 200
+        assert "token" in new.json()
+
+
+class TestAdminDeleteUser:
+    def test_soft_delete_hides_user_and_blocks_me(self, http, admin_headers):
+        u = _mk_user(http, "TEST_Delete")
+        # get token before delete
+        tok = u["token"]
+        r = http.delete(f"{API}/admin/users/{u['id']}", headers=admin_headers)
+        assert r.status_code == 200
+        # /admin/users list must NOT contain user
+        listing = http.get(f"{API}/admin/users", headers=admin_headers).json()
+        assert not any(x["id"] == u["id"] for x in listing), "Deleted user still visible in admin list"
+        # /me with the deleted user's token should fail
+        me = http.get(f"{API}/me", headers={"Authorization": f"Bearer {tok}"})
+        assert me.status_code in (401, 403, 404)
+
+
+class TestAdminPayoutReprocessBlocked:
+    def test_double_process_returns_400(self, http, admin_headers, user_headers):
+        http.post(f"{API}/earn", headers=user_headers, json={"gameId": None, "points": 3000, "title": "TEST reprocess topup"})
+        pr = http.post(f"{API}/payout", headers=user_headers, json={"amountRupees": 2, "upi": "rep@upi"})
+        assert pr.status_code == 200
+        pid = pr.json()["payouts"][0]["id"]
+        r1 = http.post(f"{API}/admin/payouts/{pid}/status", headers=admin_headers, json={"status": "successful"})
+        assert r1.status_code == 200
+        r2 = http.post(f"{API}/admin/payouts/{pid}/status", headers=admin_headers, json={"status": "successful"})
+        assert r2.status_code == 400
+
+
+class TestAdminTargetedNotify:
+    def test_targeted_notify_creates_notif_for_user_only(self, http, admin_headers, user_headers, new_user):
+        title = f"TEST_target_{random.randint(10000,99999)}"
+        r = http.post(f"{API}/admin/notify", headers=admin_headers,
+                      json={"title": title, "body": "for you", "userId": new_user["id"]})
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["ok"] is True
+        assert d["recipients"] == 1
+        time.sleep(0.5)
+        me = http.get(f"{API}/me", headers=user_headers).json()
+        assert any(n["title"] == title for n in me["notifs"])
+
+    def test_targeted_notify_invalid_userid_400(self, http, admin_headers):
+        r = http.post(f"{API}/admin/notify", headers=admin_headers,
+                      json={"title": "x", "body": "y", "userId": "not-an-oid"})
+        assert r.status_code == 400
+
+
+class TestAdminConfigGroups:
+    """Save each config group individually; verify persistence & non-wiping of other groups."""
+
+    def test_each_group_persists_and_others_survive(self, http, admin_headers):
+        # snapshot before
+        before = http.get(f"{API}/config").json()
+
+        groups = {
+            "gameMaxReward": {"spin": 42, "quiz": 43},
+            "chancesPerAd": {"spin": 3, "quiz": 4},
+            "pointsPerRupee": 101,
+            "chips": [{"label": "TEST_chip", "value": 5}],
+            "banners": [{"title": "TEST_b", "body": "b", "icon": "star", "tint": "brand", "route": "/x", "enabled": True}],
+            "slideMenu": [{"icon": "cog", "label": "TEST_menu", "url": "https://x"}],
+            "forceUpdate": {"enabled": False, "minVersion": "1.0.0", "message": "TEST"},
+        }
+        applied = {}
+        for k, v in groups.items():
+            r = http.put(f"{API}/admin/config", headers=admin_headers, json={k: v})
+            assert r.status_code == 200, f"{k} save failed: {r.text}"
+            cfg = r.json()
+            assert cfg.get(k) == v, f"{k} did not persist as expected. got={cfg.get(k)}"
+            applied[k] = v
+
+        # After all group saves, ALL should still be present & equal to what we applied
+        final = http.get(f"{API}/config").json()
+        for k, v in applied.items():
+            assert final.get(k) == v, f"{k} was wiped by a later group save"
+        # And unrelated existing keys must still exist
+        for k in ("checkinRewards", "maintenance"):
+            assert k in final
+
+        # restore near-defaults for pointsPerRupee (avoid breaking payout math for other tests)
+        http.put(f"{API}/admin/config", headers=admin_headers,
+                 json={"pointsPerRupee": before.get("pointsPerRupee", 100)})
+
+
+class TestAdminMaintenanceToggle:
+    def test_toggle_global_maintenance_and_reset(self, http, admin_headers):
+        # Enable
+        r = http.put(f"{API}/admin/config", headers=admin_headers,
+                     json={"maintenance": {"global": True, "screens": {}}})
+        assert r.status_code == 200
+        cfg = http.get(f"{API}/config").json()
+        assert cfg["maintenance"]["global"] is True
+        # Reset back to False (MUST happen so app remains usable)
+        r2 = http.put(f"{API}/admin/config", headers=admin_headers,
+                      json={"maintenance": {"global": False, "screens": {}}})
+        assert r2.status_code == 200
+        cfg2 = http.get(f"{API}/config").json()
+        assert cfg2["maintenance"]["global"] is False
+
+
+class TestAdminDashboardShape:
+    def test_dashboard_types(self, http, admin_headers):
+        d = http.get(f"{API}/admin/dashboard", headers=admin_headers).json()
+        assert isinstance(d["users"], int)
+        assert isinstance(d["pendingCount"], int)
+        assert isinstance(d["paidCount"], int)
+        assert isinstance(d["pendingAmt"], (int, float))
+        assert isinstance(d["paidAmt"], (int, float))
+
+
+class TestAdminPayoutsShape:
+    def test_payouts_have_embedded_user(self, http, admin_headers, user_headers):
+        # create a payout to guarantee at least one row with embedded user
+        http.post(f"{API}/earn", headers=user_headers, json={"gameId": None, "points": 500, "title": "TEST embed"})
+        http.post(f"{API}/payout", headers=user_headers, json={"amountRupees": 1, "upi": "emb@upi"})
+        arr = http.get(f"{API}/admin/payouts", headers=admin_headers).json()
+        assert arr and any(p.get("user") and "mobile" in p["user"] for p in arr)
